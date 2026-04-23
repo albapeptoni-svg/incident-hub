@@ -13,6 +13,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+import { isSupabaseConfigured } from '@/integrations/supabase/client';
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -20,6 +22,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      // Provide a mock admin session for preview environments
+      const mockUser = { id: 'mock-id', email: 'admin@siecbridge.io' } as User;
+      setSession({ user: mockUser } as Session);
+      setUser(mockUser);
+      setProfile({
+        id: 'mock-id',
+        nombre: 'Admin Lovable (Mock)',
+        email: 'admin@siecbridge.io',
+        rol: 'admin',
+        activo: true
+      });
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);

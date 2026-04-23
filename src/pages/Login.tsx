@@ -8,6 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Lock, Mail, ShieldCheck, Zap, Loader2 } from "lucide-react";
 
+import { isSupabaseConfigured } from "@/integrations/supabase/client";
+
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -18,6 +20,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    if (!isSupabaseConfigured) {
+      toast({
+        title: "Modo Preview (Mock)",
+        description: "Iniciando sesión en modo demostración.",
+      });
+      setTimeout(() => {
+        navigate("/dashboard");
+        setLoading(false);
+      }, 1000);
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
