@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { usuarios, automatizaciones } from "@/mocks"; // Still using mocks for these
+import { usuarios, automatizaciones } from "@/mocks";
 import {
   ArrowUpRight,
   ClipboardCheck,
@@ -18,10 +18,22 @@ import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { usePartes, useCentros } from "@/hooks/use-data";
 
-// Dummy activity for now
+// Dummy activity
 const actividad = [
-  { id: "a-1", tipo: "envio" as const, texto: "Lote LOTE-2025-0042 enviado a SIEC", usuario: "Marta Ribas", hora: "hace 12 min" },
-  { id: "a-2", tipo: "edicion" as const, texto: "Incidencia #3 del parte PT-2025-00142 editada", usuario: "Jordi Vila", hora: "hace 38 min" },
+  {
+    id: "a-1",
+    tipo: "envio" as const,
+    texto: "Lote LOTE-2025-0042 enviado a SIEC",
+    usuario: "Marta Ribas",
+    hora: "hace 12 min",
+  },
+  {
+    id: "a-2",
+    tipo: "edicion" as const,
+    texto: "Incidencia #3 del parte PT-2025-00142 editada",
+    usuario: "Jordi Vila",
+    hora: "hace 38 min",
+  },
 ];
 
 export default function Dashboard() {
@@ -40,8 +52,8 @@ export default function Dashboard() {
     <div>
       <PageHeader
         eyebrow="Visión general"
-        title="Dashboard"
-        subtitle="Estado en tiempo real de partes, incidencias y envíos a SIEC."
+        title="Dashboard OK"
+        subtitle="Estado en tiempo real de partes, incidencias y envíos a SIEC. Preview refresh."
         actions={
           <>
             <Button variant="outline" size="sm">
@@ -61,25 +73,58 @@ export default function Dashboard() {
         <div className="lg:col-span-2 surface-card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-display text-lg font-semibold">Integración SIEC — hoy</h3>
-              <p className="text-sm text-muted-foreground">Resumen de envíos automatizados y manuales.</p>
+              <h3 className="font-display text-lg font-semibold">
+                Integración SIEC — hoy
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Resumen de envíos automatizados y manuales.
+              </p>
             </div>
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/cola">Ver cola <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
+              <Link to="/cola">
+                Ver cola <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
             </Button>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {[
-              { label: "Enviadas", value: automatizaciones.filter(a => a.estado === 'completado').length * 40, color: "from-primary to-primary-glow" },
-              { label: "Confirmadas", value: automatizaciones.filter(a => a.estado === 'completado').length * 35, color: "from-success to-success" },
-              { label: "Con error", value: automatizaciones.filter(a => a.estado === 'error').length, color: "from-destructive to-warning" },
+              {
+                label: "Enviadas",
+                value: automatizaciones.filter(a => a.estado === "completado").length * 40,
+                color: "from-primary to-primary-glow",
+              },
+              {
+                label: "Confirmadas",
+                value: automatizaciones.filter(a => a.estado === "completado").length * 35,
+                color: "from-success to-success",
+              },
+              {
+                label: "Con error",
+                value: automatizaciones.filter(a => a.estado === "error").length,
+                color: "from-destructive to-warning",
+              },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg border border-border bg-surface/50 p-4">
-                <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-                <p className="mt-1 font-display text-2xl font-bold">{item.value}</p>
-                <div className={cn("mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden")}>
-                  <div className={cn("h-full rounded-full bg-gradient-to-r", item.color)} style={{ width: `${Math.min((item.value/100)*100, 100)}%` }} />
+              <div
+                key={item.label}
+                className="rounded-lg border border-border bg-surface/50 p-4"
+              >
+                <p className="text-xs font-medium text-muted-foreground">
+                  {item.label}
+                </p>
+                <p className="mt-1 font-display text-2xl font-bold">
+                  {item.value}
+                </p>
+                <div className="mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full bg-gradient-to-r",
+                      item.color
+                    )}
+                    style={{
+                      width: `${Math.min((item.value / 100) * 100, 100)}%`,
+                    }}
+                  />
                 </div>
               </div>
             ))}
@@ -91,19 +136,24 @@ export default function Dashboard() {
               {partes.slice(0, 4).map((p) => {
                 const centro = centros.find(c => c.id === p.centroId);
                 const tecnico = usuarios.find(u => u.id === p.tecnicoId);
+
                 return (
                   <Link
                     key={p.id}
                     to={`/partes/${p.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/40"
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-muted/40"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <FileText className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{p.codigo} · {centro?.nombre}</p>
-                        <p className="text-xs text-muted-foreground truncate">{tecnico?.nombre} · {p.numIncidencias} incidencias</p>
+                        <p className="text-sm font-semibold truncate">
+                          {p.codigo} · {centro?.nombre}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {tecnico?.nombre} · {p.numIncidencias} incidencias
+                        </p>
                       </div>
                     </div>
                     <StatusBadge estado={p.estado} />
@@ -121,19 +171,55 @@ export default function Dashboard() {
       {/* Accesos rápidos */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { title: "Revisar incidencias", desc: "8 pendientes", to: "/revision", icon: ClipboardCheck, accent: "from-info to-primary-glow" },
-          { title: "Cola SIEC", desc: "5 lotes activos", to: "/cola", icon: Send, accent: "from-primary to-secondary" },
-          { title: "Historial", desc: "Auditoría completa", to: "/historial", icon: Activity, accent: "from-success to-info" },
-          { title: "Administración", desc: "Usuarios y ajustes", to: "/admin", icon: Sparkles, accent: "from-warning to-destructive" },
+          {
+            title: "Revisar incidencias",
+            desc: "8 pendientes",
+            to: "/revision",
+            icon: ClipboardCheck,
+            accent: "from-info to-primary-glow",
+          },
+          {
+            title: "Cola SIEC",
+            desc: "5 lotes activos",
+            to: "/cola",
+            icon: Send,
+            accent: "from-primary to-secondary",
+          },
+          {
+            title: "Historial",
+            desc: "Auditoría completa",
+            to: "/historial",
+            icon: Activity,
+            accent: "from-success to-info",
+          },
+          {
+            title: "Administración",
+            desc: "Usuarios y ajustes",
+            to: "/admin",
+            icon: Sparkles,
+            accent: "from-warning to-destructive",
+          },
         ].map((q) => (
-          <Link key={q.title} to={q.to} className="group surface-card p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
-            <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-white", q.accent)}>
+          <Link
+            key={q.title}
+            to={q.to}
+            className="group surface-card p-5 hover:shadow-md"
+          >
+            <div
+              className={cn(
+                "inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-white",
+                q.accent
+              )}
+            >
               <q.icon className="h-5 w-5" />
             </div>
-            <p className="mt-3 font-display text-base font-semibold">{q.title}</p>
+            <p className="mt-3 font-display text-base font-semibold">
+              {q.title}
+            </p>
             <p className="text-xs text-muted-foreground">{q.desc}</p>
             <div className="mt-3 inline-flex items-center text-xs font-medium text-primary">
-              Abrir <ArrowUpRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+              Abrir{" "}
+              <ArrowUpRight className="ml-1 h-3 w-3 group-hover:translate-x-0.5" />
             </div>
           </Link>
         ))}
