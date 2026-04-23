@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  Sidebar,
+  Sidebar as SidebarUI,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -12,6 +12,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/utils";
+import { useAuth } from "@/hooks/use-auth";
 import {
   LayoutDashboard,
   FileText,
@@ -21,8 +23,8 @@ import {
   Settings,
   ShieldCheck,
   Zap,
+  LogOut,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const mainItems = [
   { title: "Dashboard",   url: "/dashboard",   icon: LayoutDashboard },
@@ -36,8 +38,9 @@ const adminItems = [
   { title: "Administración", url: "/admin", icon: Settings },
 ];
 
-export function AppSidebar() {
+export function Sidebar() {
   const { state } = useSidebar();
+  const { signOut } = useAuth();
   const collapsed = state === "collapsed";
   const location = useLocation();
 
@@ -76,7 +79,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-accent shadow-glow">
@@ -117,21 +120,33 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
         {!collapsed ? (
-          <div className="rounded-lg bg-sidebar-accent/40 p-3">
-            <div className="flex items-center gap-2 text-sidebar-foreground">
-              <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
-              <span className="text-xs font-semibold">SIEC conectado</span>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-sidebar-accent/40 p-3">
+              <div className="flex items-center gap-2 text-sidebar-foreground">
+                <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
+                <span className="text-xs font-semibold">SIEC conectado</span>
+              </div>
+              <p className="mt-1 text-[11px] text-sidebar-foreground/60">
+                API operativa · v2.4.1
+              </p>
             </div>
-            <p className="mt-1 text-[11px] text-sidebar-foreground/60">
-              API operativa · v2.4.1
-            </p>
+            <button 
+              onClick={() => signOut()}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Cerrar sesión</span>
+            </button>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-4">
             <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
+            <button onClick={() => signOut()} title="Cerrar sesión">
+              <LogOut className="h-4 w-4 text-destructive" />
+            </button>
           </div>
         )}
       </SidebarFooter>
-    </Sidebar>
+    </SidebarUI>
   );
 }

@@ -1,36 +1,41 @@
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
-import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { actividad, partes } from "@/lib/mockData";
+import { usuarios, automatizaciones } from "@/mocks"; // Still using mocks for these
 import {
-  AlertCircle,
   ArrowUpRight,
-  CheckCircle2,
   ClipboardCheck,
   FileText,
   Send,
   Sparkles,
   Activity,
   Plus,
-  Zap,
+  Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils";
+import { DashboardStats } from "@/components/dashboard/DashboardStats";
+import { RecentActivity } from "@/components/dashboard/RecentActivity";
+import { usePartes, useCentros } from "@/hooks/use-data";
 
-const tipoIcon = {
-  envio: Send,
-  edicion: ClipboardCheck,
-  error: AlertCircle,
-  creacion: FileText,
-  login: ShieldUser,
-};
-
-function ShieldUser(props: React.SVGProps<SVGSVGElement>) {
-  return <Sparkles {...props} />;
-}
+// Dummy activity for now
+const actividad = [
+  { id: "a-1", tipo: "envio" as const, texto: "Lote LOTE-2025-0042 enviado a SIEC", usuario: "Marta Ribas", hora: "hace 12 min" },
+  { id: "a-2", tipo: "edicion" as const, texto: "Incidencia #3 del parte PT-2025-00142 editada", usuario: "Jordi Vila", hora: "hace 38 min" },
+];
 
 export default function Dashboard() {
+  const { data: partes = [], isLoading: loadingPartes } = usePartes();
+  const { data: centros = [], isLoading: loadingCentros } = useCentros();
+
+  if (loadingPartes || loadingCentros) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -49,12 +54,7 @@ export default function Dashboard() {
         }
       />
 
-      <div className="stat-grid">
-        <StatCard label="Partes pendientes" value={12} icon={FileText} accent="warning" trend={{ value: "+3 hoy", positive: true }} />
-        <StatCard label="En revisión" value={28} icon={ClipboardCheck} accent="info" trend={{ value: "+8", positive: true }} />
-        <StatCard label="Listas para enviar" value={47} icon={CheckCircle2} accent="success" trend={{ value: "+12", positive: true }} />
-        <StatCard label="Errores integración" value={3} icon={AlertCircle} accent="destructive" trend={{ value: "-2", positive: true }} />
-      </div>
+      <DashboardStats />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Resumen integración */}
@@ -71,15 +71,15 @@ export default function Dashboard() {
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {[
-              { label: "Enviadas", value: 86, color: "from-primary to-primary-glow" },
-              { label: "Confirmadas", value: 79, color: "from-success to-success" },
-              { label: "Con error", value: 3, color: "from-destructive to-warning" },
+              { label: "Enviadas", value: automatizaciones.filter(a => a.estado === 'completado').length * 40, color: "from-primary to-primary-glow" },
+              { label: "Confirmadas", value: automatizaciones.filter(a => a.estado === 'completado').length * 35, color: "from-success to-success" },
+              { label: "Con error", value: automatizaciones.filter(a => a.estado === 'error').length, color: "from-destructive to-warning" },
             ].map((item) => (
               <div key={item.label} className="rounded-lg border border-border bg-surface/50 p-4">
                 <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
                 <p className="mt-1 font-display text-2xl font-bold">{item.value}</p>
                 <div className={cn("mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden")}>
-                  <div className={cn("h-full rounded-full bg-gradient-to-r", item.color)} style={{ width: `${(item.value/100)*100}%` }} />
+                  <div className={cn("h-full rounded-full bg-gradient-to-r", item.color)} style={{ width: `${Math.min((item.value/100)*100, 100)}%` }} />
                 </div>
               </div>
             ))}
@@ -88,57 +88,34 @@ export default function Dashboard() {
           <div className="mt-6">
             <h4 className="text-sm font-semibold mb-3">Últimos partes</h4>
             <div className="space-y-2">
-              {partes.slice(0, 4).map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/partes/${p.id}`}
-                  className="flex items-center justify-between rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <FileText className="h-4 w-4" />
+              {partes.slice(0, 4).map((p) => {
+                const centro = centros.find(c => c.id === p.centroId);
+                const tecnico = usuarios.find(u => u.id === p.tecnicoId);
+                return (
+                  <Link
+                    key={p.id}
+                    to={`/partes/${p.id}`}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">{p.codigo} · {centro?.nombre}</p>
+                        <p className="text-xs text-muted-foreground truncate">{tecnico?.nombre} · {p.numIncidencias} incidencias</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{p.codigo} · {p.centro}</p>
-                      <p className="text-xs text-muted-foreground truncate">{p.tecnico} · {p.numIncidencias} incidencias</p>
-                    </div>
-                  </div>
-                  <StatusBadge estado={p.estado} />
-                </Link>
-              ))}
+                    <StatusBadge estado={p.estado} />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Actividad */}
-        <div className="surface-card p-6">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <h3 className="font-display text-lg font-semibold">Actividad reciente</h3>
-          </div>
-          <div className="mt-4 space-y-4">
-            {actividad.map((a) => {
-              const Icon = tipoIcon[a.tipo] ?? Activity;
-              const color =
-                a.tipo === "error" ? "text-destructive bg-destructive/10" :
-                a.tipo === "envio" ? "text-primary bg-primary/10" :
-                a.tipo === "edicion" ? "text-info bg-info/10" :
-                a.tipo === "creacion" ? "text-success bg-success/10" :
-                "text-muted-foreground bg-muted";
-              return (
-                <div key={a.id} className="flex gap-3">
-                  <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-md", color)}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1 pb-3 border-b border-border last:border-0">
-                    <p className="text-sm leading-snug">{a.texto}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{a.usuario} · {a.hora}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <RecentActivity actividad={actividad} />
       </div>
 
       {/* Accesos rápidos */}
