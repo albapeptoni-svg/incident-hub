@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { dataService } from "@/services/data.service";
-import { partes as mockPartes, incidencias as mockIncidencias, centros as mockCentros } from "@/mocks";
+import { 
+  partes as mockPartes, 
+  incidencias as mockIncidencias, 
+  centros as mockCentros,
+  automatizaciones as mockAutomatizaciones,
+  usuarios as mockUsuarios 
+} from "@/mocks";
 
 const USE_MOCKS = true; // Temporary flag to switch between mocks and real data
 
@@ -33,6 +39,26 @@ export function useCentros() {
     queryFn: async () => {
       if (USE_MOCKS) return mockCentros;
       return dataService.getCentros();
+    },
+  });
+}
+
+export function useAutomatizaciones() {
+  return useQuery({
+    queryKey: ["automatizaciones"],
+    queryFn: async () => {
+      if (USE_MOCKS) return mockAutomatizaciones;
+      return dataService.getAutomatizaciones();
+    },
+  });
+}
+
+export function useUsuarios() {
+  return useQuery({
+    queryKey: ["usuarios"],
+    queryFn: async () => {
+      if (USE_MOCKS) return mockUsuarios;
+      return dataService.getUsuarios();
     },
   });
 }

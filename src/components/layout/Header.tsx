@@ -12,10 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 export function Header() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { profile, signOut } = useAuth();
+
   useEffect(() => setMounted(true), []);
 
   return (
@@ -44,12 +47,12 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 rounded-lg border border-border bg-card pl-1 pr-3 py-1 hover:bg-muted/50 transition-colors">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-primary font-display text-sm font-semibold text-primary-foreground">
-                MR
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-primary font-display text-sm font-semibold text-primary-foreground uppercase">
+                {profile?.nombre.split(" ").map(n => n[0]).slice(0,2).join("") || "U"}
               </div>
               <div className="hidden text-left sm:block">
-                <p className="text-xs font-semibold leading-tight">Marta Ribas</p>
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Admin</p>
+                <p className="text-xs font-semibold leading-tight">{profile?.nombre || "Usuario"}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{profile?.rol || "Técnico"}</p>
               </div>
             </button>
           </DropdownMenuTrigger>
@@ -59,7 +62,7 @@ export function Header() {
             <DropdownMenuItem>Perfil</DropdownMenuItem>
             <DropdownMenuItem>Preferencias</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Cerrar sesión</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => signOut()}>Cerrar sesión</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -143,6 +143,35 @@ export interface Database {
           estado?: string
         }
       }
+      automatizaciones: {
+        Row: {
+          id: string
+          codigo: string
+          fecha_creacion: string
+          fecha_envio: string | null
+          estado: string
+          usuario_id: string
+          logs: string | null
+        }
+        Insert: {
+          id?: string
+          codigo: string
+          fecha_creacion?: string
+          fecha_envio?: string | null
+          estado?: string
+          usuario_id: string
+          logs?: string | null
+        }
+        Update: {
+          id?: string
+          codigo?: string
+          fecha_creacion?: string
+          fecha_envio?: string | null
+          estado?: string
+          usuario_id?: string
+          logs?: string | null
+        }
+      }
     }
   }
 }

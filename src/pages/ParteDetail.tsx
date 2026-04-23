@@ -2,21 +2,47 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { incidencias, partes } from "@/lib/mockData";
-import { ArrowLeft, Building2, Calendar, ClipboardCheck, FileText, Hash, MapPin, User } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, ClipboardCheck, FileText, Hash, MapPin, User, Loader2 } from "lucide-react";
+import { usePartes, useIncidencias, useCentros, useUsuarios } from "@/hooks/use-data";
+import { useMemo } from "react";
 
 export default function ParteDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const parte = partes.find((p) => p.id === id) ?? partes[0];
-  const inc = incidencias.filter((i) => i.parteId === parte.id);
+  
+  const { data: partes = [], isLoading: loadingPartes } = usePartes();
+  const { data: centros = [], isLoading: loadingCentros } = useCentros();
+  const { data: usuarios = [], isLoading: loadingUsuarios } = useUsuarios();
+  
+  const parte = useMemo(() => partes.find((p) => p.id === id), [partes, id]);
+  const { data: inc = [], isLoading: loadingInc } = useIncidencias(parte?.id);
+
+  if (loadingPartes || loadingCentros || loadingUsuarios || (loadingInc && inc.length === 0)) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!parte) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground">Parte no encontrado.</p>
+        <Button variant="link" onClick={() => navigate("/partes")}>Volver al listado</Button>
+      </div>
+    );
+  }
+
+  const centro = centros.find(c => c.id === parte.centroId);
+  const tecnico = usuarios.find(u => u.id === parte.tecnicoId);
 
   const flow = [
     { key: "Recibido", done: true },
     { key: "OCR procesado", done: true },
-    { key: "En revisión", done: parte.estado !== "pendiente" },
-    { key: "Listo SIEC", done: ["procesado","enviado"].includes(parte.estado) },
-    { key: "Integrado", done: parte.estado === "enviado" },
+    { key: "En revisión", done: parte.estado !== "borrador" },
+    { key: "Listo SIEC", done: ["procesado","enviado","completado"].includes(parte.estado) },
+    { key: "Integrado", done: ["enviado","completado"].includes(parte.estado) },
   ];
 
   return (
@@ -27,7 +53,7 @@ export default function ParteDetail() {
 
       <PageHeader
         eyebrow={`Parte ${parte.codigo}`}
-        title={parte.centro}
+        title={centro?.nombre || "Cargando..."}
         subtitle={parte.notas ?? "Sin notas adicionales."}
         actions={
           <>
@@ -49,10 +75,10 @@ export default function ParteDetail() {
             {[
               { icon: Hash, label: "Código", val: parte.codigo },
               { icon: Calendar, label: "Fecha", val: parte.fecha },
-              { icon: Building2, label: "Centro", val: parte.centro },
-              { icon: User, label: "Técnico", val: parte.tecnico },
+              { icon: Building2, label: "Centro", val: centro?.nombre || "—" },
+              { icon: User, label: "Técnico", val: tecnico?.nombre || "—" },
               { icon: FileText, label: "Incidencias", val: String(parte.numIncidencias) },
-              { icon: MapPin, label: "Ubicación", val: "Barcelona, España" },
+              { icon: MapPin, label: "Ubicación", val: centro?.ciudad || "España" },
             ].map((row) => (
               <div key={row.label} className="flex items-start gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
                 <row.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

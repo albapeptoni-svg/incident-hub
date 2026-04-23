@@ -3,11 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { usuarios } from "@/lib/mockData";
 import { cn } from "@/utils";
-import { Plus, Settings2, Shield, UserPlus } from "lucide-react";
+import { Plus, Settings2, Shield, UserPlus, Loader2 } from "lucide-react";
+import { useUsuarios, useCentros } from "@/hooks/use-data";
 
 export default function Admin() {
+  const { data: usuarios = [], isLoading: loadingUsuarios } = useUsuarios();
+  const { data: centros = [], isLoading: loadingCentros } = useCentros();
+
+  if (loadingUsuarios || loadingCentros) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -38,32 +49,35 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                          {u.nombre.split(" ").map((s) => s[0]).slice(0,2).join("")}
+                {usuarios.map((u) => {
+                  const centro = centros.find(c => c.id === u.centroId);
+                  return (
+                    <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-primary text-xs font-semibold text-primary-foreground">
+                            {u.nombre.split(" ").map((s) => s[0]).slice(0,2).join("")}
+                          </div>
+                          <div>
+                            <p className="font-medium">{u.nombre}</p>
+                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{u.nombre}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-                        u.rol === "admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                      )}>
-                        <Shield className="h-3 w-3" /> {u.rol}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{u.centro}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{u.ultimoAcceso}</td>
-                    <td className="px-5 py-3.5"><Switch defaultChecked={u.activo} /></td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+                          u.rol === "admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                        )}>
+                          <Shield className="h-3 w-3" /> {u.rol}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{centro?.nombre ?? "Global"}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{u.ultimoAcceso || "—"}</td>
+                      <td className="px-5 py-3.5"><Switch defaultChecked={u.activo} /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
