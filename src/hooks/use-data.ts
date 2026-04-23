@@ -8,7 +8,9 @@ import {
   usuarios as mockUsuarios 
 } from "@/mocks";
 
-const USE_MOCKS = true; // Temporary flag to switch between mocks and real data
+import { isSupabaseConfigured } from "@/integrations/supabase/client";
+
+const USE_MOCKS = !isSupabaseConfigured || true; // Always true for now as requested in previous sessions, but now forced if no supabase
 
 export function usePartes() {
   return useQuery({
