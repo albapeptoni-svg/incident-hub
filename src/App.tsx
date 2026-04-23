@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppThemeProvider } from "@/components/theme-provider";
 import { MainLayout } from "@/layouts/MainLayout";
-import { AuthProvider } from "./hooks/use-auth";
+import { AuthProvider } from "./hooks/useAuth";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Login from "./pages/Login.tsx";
