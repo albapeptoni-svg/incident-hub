@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { usuarios } from "@/lib/mockData";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils";
 import { Plus, Settings2, Shield, UserPlus } from "lucide-react";
 
 export default function Admin() {

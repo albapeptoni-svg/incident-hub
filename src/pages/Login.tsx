@@ -1,16 +1,48 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowRight, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowRight, Lock, Mail, ShieldCheck, Zap, Loader2 } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [email, setEmail] = useState("admin@siecbridge.io");
+  const [password, setPassword] = useState("demo1234");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/dashboard");
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Error de acceso",
+          description: error.message,
+        });
+      } else {
+        toast({
+          title: "Bienvenido",
+          description: "Has iniciado sesión correctamente.",
+        });
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -83,7 +115,14 @@ export default function Login() {
                 <Label htmlFor="email">Correo corporativo</Label>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="nombre@empresa.com" defaultValue="admin@siecbridge.io" className="h-11 pl-10" />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="nombre@empresa.com" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 pl-10" 
+                  />
                 </div>
               </div>
               <div className="space-y-2">
@@ -93,18 +132,34 @@ export default function Login() {
                 </div>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="password" type="password" placeholder="••••••••" defaultValue="demo1234" className="h-11 pl-10" />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 pl-10" 
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox id="remember" defaultChecked />
                 <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">Mantener sesión iniciada</Label>
               </div>
-              <Button type="submit" className="group h-11 w-full bg-gradient-primary text-primary-foreground hover:opacity-95 shadow-md">
-                Acceder al panel
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <Button 
+                type="submit" 
+                disabled={loading}
+                className="group h-11 w-full bg-gradient-primary text-primary-foreground hover:opacity-95 shadow-md"
+              >
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Acceder al panel"}
+                {!loading && <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
               </Button>
             </form>
+
+            <div className="mt-6 rounded-lg bg-info/5 p-4 border border-info/10 text-[11px] text-muted-foreground">
+              <p className="font-semibold text-info mb-1 uppercase tracking-wider">Nota de desarrollo</p>
+              <p>Este sistema ahora usa <strong>Supabase Auth</strong>. Asegúrate de configurar las variables de entorno en <code>.env.local</code> y tener usuarios en tu proyecto de Supabase.</p>
+            </div>
 
             <p className="mt-8 text-center text-xs text-muted-foreground">
               Acceso restringido a personal autorizado · v2.4.1
