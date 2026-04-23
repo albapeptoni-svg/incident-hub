@@ -10,7 +10,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Incidencia } from "@/types";
-import { categorias, grupos, temas } from "@/lib/mockData";
+import { categorias, grupos, temas } from "@/mocks";
 
 interface RevisionEditSheetProps {
   editing: Incidencia | null;

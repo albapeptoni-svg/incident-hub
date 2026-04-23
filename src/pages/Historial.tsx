@@ -1,10 +1,20 @@
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { lotes } from "@/lib/mockData";
-import { Download, Eye } from "lucide-react";
+import { Download, Eye, Loader2 } from "lucide-react";
+import { useAutomatizaciones } from "@/hooks/use-data";
 
 export default function Historial() {
+  const { data: lotes = [], isLoading } = useAutomatizaciones();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -30,10 +40,10 @@ export default function Historial() {
               </tr>
             </thead>
             <tbody>
-              {lotes.map((l) => (
+              {lotes.map((l: any) => (
                 <tr key={l.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                   <td className="px-5 py-3.5 font-mono text-xs font-semibold">{l.codigo}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{l.fecha}</td>
+                  <td className="px-5 py-3.5 text-muted-foreground">{l.fechaCreacion}</td>
                   <td className="px-5 py-3.5 font-mono text-xs">{l.parteCodigo}</td>
                   <td className="px-5 py-3.5">
                     <span className="inline-flex items-center justify-center min-w-[2rem] rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">

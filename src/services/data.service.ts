@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { Parte, Incidencia, Centro, Automatizacion } from '@/types';
+import { Parte, Incidencia, Centro, Automatizacion, Usuario } from '@/types';
 
 export const dataService = {
   // Centros
@@ -55,6 +55,47 @@ export const dataService = {
       crearEnSiec: i.crear_en_siec,
       motivoExclusion: i.motivo_exclusion || undefined,
       estado: i.estado as any
+    }));
+  },
+
+  // Automatizaciones (Lotes)
+  async getAutomatizaciones(): Promise<Automatizacion[]> {
+    const { data, error } = await supabase
+      .from('automatizaciones')
+      .select('*')
+      .order('fecha_creacion', { ascending: false });
+    
+    if (error) throw error;
+    
+    return (data || []).map(a => ({
+      id: a.id,
+      codigo: a.codigo,
+      fechaCreacion: a.fecha_creacion,
+      fechaEnvio: a.fecha_envio || undefined,
+      estado: a.estado as any,
+      incidenciasIds: [], // This would normally be a join or a separate table
+      usuarioId: a.usuario_id,
+      logs: a.logs || undefined
+    }));
+  },
+
+  // Usuarios (Profiles)
+  async getUsuarios(): Promise<Usuario[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+    
+    if (error) throw error;
+    
+    return (data || []).map(u => ({
+      id: u.id,
+      nombre: u.nombre,
+      email: u.email,
+      rol: u.rol as any,
+      centroId: u.centro_id || undefined,
+      activo: u.activo,
+      ultimoAcceso: u.ultimo_acceso || undefined,
+      avatarUrl: u.avatar_url || undefined
     }));
   }
 };
