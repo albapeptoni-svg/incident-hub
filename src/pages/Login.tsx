@@ -69,12 +69,10 @@ export default function Login() {
       <div className="relative grid min-h-screen lg:grid-cols-2">
         {/* Left — brand panel */}
         <div className="hidden flex-col justify-between bg-gradient-primary p-12 text-primary-foreground lg:flex">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white p-1.5 shadow-md">
-              <img src={logoLcc} alt="SIEC Bridge LCC" className="h-full w-full object-contain" />
-            </div>
+          <div className="flex items-center gap-4">
+            <img src={logoLcc} alt="SIEC Bridge LCC" className="object-contain" style={{ height: "5.5rem", width: "5.5rem" }} />
             <div>
-              <p className="font-display text-lg font-bold">SIEC Bridge LCC</p>
+              <p className="font-display text-3xl font-bold">SIEC Bridge LCC</p>
               <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Centro de Control</p>
             </div>
           </div>
@@ -110,9 +108,9 @@ export default function Login() {
         <div className="flex items-center justify-center p-6 md:p-12">
           <div className="w-full max-w-md">
             <div className="mb-8 lg:hidden">
-              <div className="inline-flex items-center gap-2.5">
-                <img src={logoLcc} alt="SIEC Bridge LCC" className="h-10 w-10 object-contain" />
-                <span className="font-display text-xl font-bold">SIEC Bridge LCC</span>
+              <div className="inline-flex items-center gap-3">
+                <img src={logoLcc} alt="SIEC Bridge LCC" className="h-20 w-20 object-contain" />
+                <span className="font-display text-3xl font-bold">SIEC Bridge LCC</span>
               </div>
             </div>
 
