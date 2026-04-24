@@ -87,7 +87,7 @@ export function Sidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge</span>
+              <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
               <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Control Center</span>
             </div>
           )}
