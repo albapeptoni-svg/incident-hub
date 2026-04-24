@@ -74,7 +74,7 @@ export default function Login() {
             </div>
             <div>
               <p className="font-display text-lg font-bold">SIEC Bridge LCC</p>
-              <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Control Center</p>
+              <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Centro de Control</p>
             </div>
           </div>
 
