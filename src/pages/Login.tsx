@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Lock, Mail, ShieldCheck, Zap, Loader2 } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
+import logoLcc from "@/assets/logo-lcc.png";
 
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
@@ -69,8 +70,8 @@ export default function Login() {
         {/* Left — brand panel */}
         <div className="hidden flex-col justify-between bg-gradient-primary p-12 text-primary-foreground lg:flex">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 backdrop-blur">
-              <Zap className="h-5 w-5" strokeWidth={2.5} />
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white p-1.5 shadow-md">
+              <img src={logoLcc} alt="SIEC Bridge LCC" className="h-full w-full object-contain" />
             </div>
             <div>
               <p className="font-display text-lg font-bold">SIEC Bridge LCC</p>
@@ -110,9 +111,7 @@ export default function Login() {
           <div className="w-full max-w-md">
             <div className="mb-8 lg:hidden">
               <div className="inline-flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-accent">
-                  <Zap className="h-5 w-5 text-white" strokeWidth={2.5} />
-                </div>
+                <img src={logoLcc} alt="SIEC Bridge LCC" className="h-10 w-10 object-contain" />
                 <span className="font-display text-xl font-bold">SIEC Bridge LCC</span>
               </div>
             </div>
