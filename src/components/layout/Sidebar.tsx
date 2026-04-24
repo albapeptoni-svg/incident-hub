@@ -22,9 +22,9 @@ import {
   History,
   Settings,
   ShieldCheck,
-  Zap,
   LogOut,
 } from "lucide-react";
+import logoLcc from "@/assets/logo-lcc.png";
 
 const mainItems = [
   { title: "Dashboard",   url: "/dashboard",   icon: LayoutDashboard },
@@ -82,9 +82,7 @@ export function Sidebar() {
     <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-accent shadow-glow">
-            <Zap className="h-5 w-5 text-white" strokeWidth={2.5} />
-          </div>
+          <img src={logoLcc} alt="SIEC Bridge LCC" className="h-9 w-9 object-contain" />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
               <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
