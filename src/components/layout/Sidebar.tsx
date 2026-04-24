@@ -81,11 +81,11 @@ export function Sidebar() {
   return (
     <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <div className="flex items-center gap-2.5">
-          <img src={logoLcc} alt="SIEC Bridge LCC" className="h-9 w-9 object-contain" />
+        <div className="flex items-center gap-3">
+          <img src={logoLcc} alt="SIEC Bridge LCC" className="h-18 w-18 object-contain" style={{ height: "4.5rem", width: "4.5rem" }} />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
+              <span className="font-display text-2xl font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
               <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Centro de Control</span>
             </div>
           )}
