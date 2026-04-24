@@ -73,7 +73,7 @@ export default function Login() {
               <Zap className="h-5 w-5" strokeWidth={2.5} />
             </div>
             <div>
-              <p className="font-display text-lg font-bold">SIEC Bridge</p>
+              <p className="font-display text-lg font-bold">SIEC Bridge LCC</p>
               <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Control Center</p>
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function Login() {
             </div>
           </div>
 
-          <p className="text-xs text-primary-foreground/50">© 2025 SIEC Bridge · Plataforma interna</p>
+          <p className="text-xs text-primary-foreground/50">© 2025 SIEC Bridge LCC · Plataforma interna</p>
         </div>
 
         {/* Right — form */}
@@ -113,7 +113,7 @@ export default function Login() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-accent">
                   <Zap className="h-5 w-5 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="font-display text-xl font-bold">SIEC Bridge</span>
+                <span className="font-display text-xl font-bold">SIEC Bridge LCC</span>
               </div>
             </div>
 
