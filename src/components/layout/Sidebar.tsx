@@ -22,14 +22,14 @@ import {
   History,
   Settings,
   ShieldCheck,
+  Zap,
   LogOut,
 } from "lucide-react";
-import logoLcc from "@/assets/logo-lcc.png";
 
 const mainItems = [
   { title: "Dashboard",   url: "/dashboard",   icon: LayoutDashboard },
   { title: "Partes",      url: "/partes",      icon: FileText },
-  { title: "Revisión",    url: "/revision",    icon: ClipboardCheck, badge: "8" },
+  { title: "Revisión",    url: "/revision",    icon: ClipboardCheck },
   { title: "Cola SIEC",   url: "/cola",        icon: Workflow },
   { title: "Historial",   url: "/historial",   icon: History },
 ];
@@ -81,12 +81,14 @@ export function Sidebar() {
   return (
     <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <div className="flex items-center gap-3">
-          <img src={logoLcc} alt="SIEC Bridge LCC" className="h-18 w-18 object-contain" style={{ height: "4.5rem", width: "4.5rem" }} />
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-accent shadow-glow">
+            <Zap className="h-5 w-5 text-white" strokeWidth={2.5} />
+          </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-2xl font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
-              <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Centro de Control</span>
+              <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
+              <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Control Center</span>
             </div>
           )}
         </div>

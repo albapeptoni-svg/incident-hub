@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { usuarios, automatizaciones } from "@/mocks";
 import {
   ArrowUpRight,
   ClipboardCheck,
@@ -16,31 +15,15 @@ import {
 import { cn } from "@/utils";
 import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
-import { usePartes, useCentros } from "@/hooks/use-data";
-
-// Dummy activity
-const actividad = [
-  {
-    id: "a-1",
-    tipo: "envio" as const,
-    texto: "Lote LOTE-2025-0042 enviado a SIEC",
-    usuario: "Marta Ribas",
-    hora: "hace 12 min",
-  },
-  {
-    id: "a-2",
-    tipo: "edicion" as const,
-    texto: "Incidencia #3 del parte PT-2025-00142 editada",
-    usuario: "Jordi Vila",
-    hora: "hace 38 min",
-  },
-];
+import { usePartes, useCentros, useAutomatizaciones, useUsuarios } from "@/hooks/use-data";
 
 export default function Dashboard() {
   const { data: partes = [], isLoading: loadingPartes } = usePartes();
   const { data: centros = [], isLoading: loadingCentros } = useCentros();
+  const { data: automatizaciones = [], isLoading: loadingAut } = useAutomatizaciones();
+  const { data: usuarios = [], isLoading: loadingUsr } = useUsuarios();
 
-  if (loadingPartes || loadingCentros) {
+  if (loadingPartes || loadingCentros || loadingAut || loadingUsr) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -52,8 +35,8 @@ export default function Dashboard() {
     <div>
       <PageHeader
         eyebrow="Visión general"
-        title="Dashboard OK"
-        subtitle="Estado en tiempo real de partes, incidencias y envíos a SIEC. Preview refresh."
+        title="Dashboard"
+        subtitle="Estado en tiempo real de partes, incidencias y envíos a SIEC."
         actions={
           <>
             <Button variant="outline" size="sm">
@@ -91,12 +74,12 @@ export default function Dashboard() {
             {[
               {
                 label: "Enviadas",
-                value: automatizaciones.filter(a => a.estado === "completado").length * 40,
+                value: automatizaciones.filter(a => a.estado === "completado").length,
                 color: "from-primary to-primary-glow",
               },
               {
                 label: "Confirmadas",
-                value: automatizaciones.filter(a => a.estado === "completado").length * 35,
+                value: automatizaciones.filter(a => a.estado === "completado").length,
                 color: "from-success to-success",
               },
               {
@@ -122,7 +105,7 @@ export default function Dashboard() {
                       item.color
                     )}
                     style={{
-                      width: `${Math.min((item.value / 100) * 100, 100)}%`,
+                      width: `${item.value > 0 ? Math.min((item.value / 10) * 100, 100) : 0}%`,
                     }}
                   />
                 </div>
@@ -133,39 +116,45 @@ export default function Dashboard() {
           <div className="mt-6">
             <h4 className="text-sm font-semibold mb-3">Últimos partes</h4>
             <div className="space-y-2">
-              {partes.slice(0, 4).map((p) => {
-                const centro = centros.find(c => c.id === p.centroId);
-                const tecnico = usuarios.find(u => u.id === p.tecnicoId);
+              {partes.length > 0 ? (
+                partes.slice(0, 4).map((p) => {
+                  const centro = centros.find(c => c.id === p.centroId);
+                  const tecnico = usuarios.find(u => u.id === p.tecnicoId);
 
-                return (
-                  <Link
-                    key={p.id}
-                    to={`/partes/${p.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-muted/40"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <FileText className="h-4 w-4" />
+                  return (
+                    <Link
+                      key={p.id}
+                      to={`/partes/${p.id}`}
+                      className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-muted/40"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">
+                            {p.codigo} {centro ? `· ${centro.nombre}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {tecnico?.nombre || "Técnico"} · {p.numIncidencias} incidencias
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">
-                          {p.codigo} · {centro?.nombre}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {tecnico?.nombre} · {p.numIncidencias} incidencias
-                        </p>
-                      </div>
-                    </div>
-                    <StatusBadge estado={p.estado} />
-                  </Link>
-                );
-              })}
+                      <StatusBadge estado={p.estado} />
+                    </Link>
+                  );
+                })
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                  <p className="text-sm text-muted-foreground">No hay partes reales registrados todavía.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Actividad */}
-        <RecentActivity actividad={actividad} />
+        {/* Actividad reciente */}
+        <RecentActivity actividad={[]} />
       </div>
 
       {/* Accesos rápidos */}
@@ -173,14 +162,14 @@ export default function Dashboard() {
         {[
           {
             title: "Revisar incidencias",
-            desc: "8 pendientes",
+            desc: `${partes.filter(p => p.estado === 'en_revision').length} pendientes`,
             to: "/revision",
             icon: ClipboardCheck,
             accent: "from-info to-primary-glow",
           },
           {
             title: "Cola SIEC",
-            desc: "5 lotes activos",
+            desc: `${automatizaciones.filter(a => ['en_proceso', 'error'].includes(a.estado)).length} lotes activos`,
             to: "/cola",
             icon: Send,
             accent: "from-primary to-secondary",
