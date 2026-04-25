@@ -8,21 +8,35 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
 import logoLcc from "@/assets/logo-lcc.png";
+import { isMockMode } from "@/config/data-mode";
 
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [email, setEmail] = useState("admin@siecbridge.io");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState(isMockMode ? "admin" : "admin@siecbridge.io");
+  const [password, setPassword] = useState(isMockMode ? "demo" : "demo1234");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    if (!isSupabaseConfigured) {
+    if (isMockMode) {
+      const isValidMockLogin =
+        (email === "admin" || email === "admin@siecbridge.io") && password === "demo";
+
+      if (!isValidMockLogin) {
+        toast({
+          variant: "destructive",
+          title: "Credenciales de demo incorrectas",
+          description: "Usa admin / demo para acceder en modo mock.",
+        });
+        setLoading(false);
+        return;
+      }
+
       toast({
         title: "Modo Preview (Mock)",
         description: "Iniciando sesión en modo demostración.",
@@ -31,6 +45,16 @@ export default function Login() {
         navigate("/dashboard");
         setLoading(false);
       }, 1000);
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      toast({
+        variant: "destructive",
+        title: "Supabase no está configurado",
+        description: "Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY o usa VITE_DATA_MODE=mock.",
+      });
+      setLoading(false);
       return;
     }
 
@@ -128,8 +152,8 @@ export default function Login() {
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input 
                     id="email" 
-                    type="email" 
-                    placeholder="nombre@empresa.com" 
+                    type={isMockMode ? "text" : "email"}
+                    placeholder={isMockMode ? "admin" : "nombre@empresa.com"}
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11 pl-10" 

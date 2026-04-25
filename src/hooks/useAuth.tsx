@@ -1,7 +1,9 @@
 import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Session, User } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { Usuario } from '@/types';
+import { isMockMode } from '@/config/data-mode';
+import { isSupabaseConfigured } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   session: Session | null;
@@ -13,7 +15,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-import { isSupabaseConfigured } from '@/integrations/supabase/client';
+const mockUser = {
+  id: 'mock-admin-id',
+  email: 'admin@siecbridge.local',
+} as User;
+
+const mockSession = {
+  user: mockUser,
+} as Session;
+
+const mockProfile: Usuario = {
+  id: 'mock-admin-id',
+  nombre: 'Administrador Preview',
+  email: 'admin@siecbridge.local',
+  rol: 'admin',
+  activo: true,
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -22,6 +39,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isMockMode) {
+      setSession(mockSession);
+      setUser(mockUser);
+      setProfile(mockProfile);
+      setLoading(false);
+      return;
+    }
+
     if (!isSupabaseConfigured) {
       setSession(null);
       setUser(null);
@@ -80,6 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
+    if (isMockMode) {
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      return;
+    }
+
     await supabase.auth.signOut();
   };
 
