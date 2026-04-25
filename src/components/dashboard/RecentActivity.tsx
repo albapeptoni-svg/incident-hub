@@ -1,4 +1,4 @@
-import { Activity, Send, ClipboardCheck, AlertCircle, FileText, Sparkles, Zap } from "lucide-react";
+import { Activity, Send, ClipboardCheck, AlertCircle, FileText, Sparkles } from "lucide-react";
 import { cn } from "@/utils";
 import { ActividadItem } from "@/types";
 
@@ -16,12 +16,17 @@ interface RecentActivityProps {
 
 export function RecentActivity({ actividad }: RecentActivityProps) {
   return (
-    <div className="surface-card p-6">
-      <div className="flex items-center gap-2">
-        <Zap className="h-4 w-4 text-primary" />
-        <h3 className="font-display text-lg font-semibold">Actividad reciente</h3>
+    <aside className="surface-card p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary/70">Timeline</p>
+          <h3 className="mt-1 font-display text-lg font-semibold">Actividad reciente</h3>
+        </div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Activity className="h-4 w-4" />
+        </div>
       </div>
-      <div className="mt-4 space-y-4">
+      <div className="mt-5 space-y-4">
         {actividad.length > 0 ? (
           actividad.map((a) => {
             const Icon = tipoIcon[a.tipo as keyof typeof tipoIcon] ?? Activity;
@@ -44,11 +49,15 @@ export function RecentActivity({ actividad }: RecentActivityProps) {
             );
           })
         ) : (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center">
-            <p className="text-sm text-muted-foreground">No hay actividad reciente registrada.</p>
+          <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
+              <Activity className="h-4 w-4" />
+            </div>
+            <p className="mt-3 text-sm font-medium text-foreground">Sin actividad registrada</p>
+            <p className="mt-1 text-xs text-muted-foreground">Los últimos eventos aparecerán aquí.</p>
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
