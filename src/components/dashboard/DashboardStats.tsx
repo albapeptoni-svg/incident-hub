@@ -21,11 +21,11 @@ export function DashboardStats() {
   }
 
   return (
-    <div className="stat-grid">
+    <section className="stat-grid">
       <StatCard label="Partes borradores" value={pendientes} icon={FileText} accent="warning" />
       <StatCard label="En revisión" value={enRevision} icon={ClipboardCheck} accent="info" />
       <StatCard label="Incidencias aprobadas" value={aprobadas} icon={CheckCircle2} accent="success" />
       <StatCard label="Errores lotes" value={errores} icon={AlertCircle} accent="destructive" />
-    </div>
+    </section>
   );
 }
