@@ -22,16 +22,17 @@ const accents: Record<NonNullable<StatCardProps["accent"]>, string> = {
 export function StatCard({ label, value, icon: Icon, trend, accent = "primary", className }: StatCardProps) {
   return (
     <div className={cn(
-      "group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5",
+      "group relative overflow-hidden rounded-lg border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md",
       className,
     )}>
-      <div className="flex items-start justify-between">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+      <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="font-display text-3xl font-semibold tracking-tight text-foreground">{value}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="font-display text-3xl font-bold tracking-tight text-foreground">{value}</p>
           {trend && (
             <div className={cn(
-              "inline-flex items-center gap-1 text-xs font-medium",
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
               trend.positive ? "text-success" : "text-destructive",
             )}>
               {trend.positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
@@ -39,11 +40,10 @@ export function StatCard({ label, value, icon: Icon, trend, accent = "primary", 
             </div>
           )}
         </div>
-        <div className={cn("flex h-11 w-11 items-center justify-center rounded-lg", accents[accent])}>
+        <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-current/10", accents[accent])}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-accent opacity-0 blur-3xl transition-opacity group-hover:opacity-10" />
     </div>
   );
 }
