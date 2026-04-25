@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Incidencia } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Search, X, CheckCheck, Loader2 } from "lucide-react";
+import { AlertTriangle, ClipboardList, Search, X, CheckCheck, Loader2 } from "lucide-react";
 import { RevisionStats } from "@/components/revision/RevisionStats";
 import { RevisionTable } from "@/components/revision/RevisionTable";
 import { RevisionEditSheet } from "@/components/revision/RevisionEditSheet";
@@ -14,16 +14,14 @@ export default function Revision() {
   const { toast } = useToast();
   const { data: allPartes = [], isLoading: loadingPartes } = usePartes();
   const { data: allCentros = [], isLoading: loadingCentros } = useCentros();
-  
-  // For this view we'll assume we are reviewing the first available "en_revision" parte
-  const parte = useMemo(() => allPartes.find(p => p.estado === 'en_revision') || allPartes[0], [allPartes]);
+
+  const parte = useMemo(() => allPartes.find(p => p.estado === "en_revision") || allPartes[0], [allPartes]);
   const { data: initialIncidencias = [], isLoading: loadingIncidencias } = useIncidencias(parte?.id);
-  
+
   const [items, setItems] = useState<Incidencia[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
-  // Update local state when hook data arrives
   useEffect(() => {
     if (initialIncidencias.length > 0) {
       setItems(initialIncidencias);
@@ -56,10 +54,10 @@ export default function Revision() {
     toast({ title: "Incidencia marcada como lista (aprobada)" });
   };
 
-  const handleSend = () => {
+  const handlePrepareBatch = () => {
     toast({
-      title: "Lote preparado para SIEC",
-      description: `${seleccionadas} incidencias añadidas a la cola de envío. (Demo visual)`,
+      title: "Lote interno preparado",
+      description: `${seleccionadas} incidencias añadidas a la cola interna para revisión y simulación. No se ha enviado nada a SIEC.`,
     });
   };
 
@@ -82,9 +80,9 @@ export default function Revision() {
   return (
     <div>
       <PageHeader
-        eyebrow={`Parte ${parte.codigo} · ${centro?.nombre || '...'}`}
+        eyebrow={`Parte ${parte.codigo} · ${centro?.nombre || "..."}`}
         title="Revisión de incidencias"
-        subtitle="Valida el OCR, corrige campos y selecciona qué incidencias se enviarán a SIEC."
+        subtitle="Valida el OCR, corrige campos y selecciona qué incidencias formarán parte de un lote interno SIEC."
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => toggleAll(true)}>
@@ -93,16 +91,25 @@ export default function Revision() {
             <Button variant="outline" size="sm" onClick={() => toggleAll(false)}>
               <X className="mr-2 h-4 w-4" /> Desmarcar
             </Button>
-            <Button onClick={handleSend} className="bg-gradient-primary text-primary-foreground shadow-md">
-              <Send className="mr-2 h-4 w-4" /> Enviar a SIEC ({seleccionadas})
+            <Button onClick={handlePrepareBatch} className="bg-gradient-primary text-primary-foreground shadow-md">
+              <ClipboardList className="mr-2 h-4 w-4" /> Preparar lote SIEC ({seleccionadas})
             </Button>
           </>
         }
       />
 
+      <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+        <div className="flex gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold">No se enviará nada a SIEC todavía.</p>
+            <p>Este paso solo prepara un lote interno para revisión y simulación. El envío real será irreversible y requerirá aprobación humana.</p>
+          </div>
+        </div>
+      </div>
+
       <RevisionStats items={items} seleccionadas={seleccionadas} />
 
-      {/* Buscador */}
       <div className="mb-3 flex items-center gap-2">
         <div className="relative flex-1 max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -111,17 +118,17 @@ export default function Revision() {
         <p className="text-xs text-muted-foreground">{filtered.length} resultados</p>
       </div>
 
-      <RevisionTable 
-        items={filtered} 
-        onUpdateItem={updateItem} 
-        onEdit={setOpen} 
+      <RevisionTable
+        items={filtered}
+        onUpdateItem={updateItem}
+        onEdit={setOpen}
       />
 
-      <RevisionEditSheet 
-        editing={editing} 
-        onClose={() => setOpen(null)} 
-        onUpdateItem={updateItem} 
-        onMarkAsReady={handleMarkAsReady} 
+      <RevisionEditSheet
+        editing={editing}
+        onClose={() => setOpen(null)}
+        onUpdateItem={updateItem}
+        onMarkAsReady={handleMarkAsReady}
       />
     </div>
   );
