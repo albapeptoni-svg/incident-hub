@@ -30,6 +30,15 @@ export interface Automatizacion {
   logs?: string;
 }
 
+export interface Foto {
+  id: string;
+  parteId?: string;
+  incidenciaId?: string;
+  url: string;
+  descripcion?: string;
+  fechaCreacion?: string;
+}
+
 export interface ActividadItem {
   id: string;
   tipo: "envio" | "edicion" | "error" | "creacion" | "login";
