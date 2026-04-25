@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { PartesFilters } from "@/components/incidencias/PartesFilters";
 import { PartesTable } from "@/components/incidencias/PartesTable";
-import { usePartes, useCentros } from "@/hooks/use-data";
-import { usuarios } from "@/mocks"; // Still using mock for users as we haven't implemented useUsers hook yet
+import { usePartes, useCentros, useUsuarios } from "@/hooks/use-data";
 
 export default function PartesList() {
   const [q, setQ] = useState("");
@@ -13,6 +12,7 @@ export default function PartesList() {
 
   const { data: partes = [], isLoading: loadingPartes } = usePartes();
   const { data: centros = [], isLoading: loadingCentros } = useCentros();
+  const { data: usuarios = [], isLoading: loadingUsuarios } = useUsuarios();
 
   const filtered = useMemo(() => {
     return partes.filter((p) => {
@@ -26,9 +26,9 @@ export default function PartesList() {
       const matchesE = estado === "todos" || p.estado === estado;
       return matchesQ && matchesE;
     });
-  }, [q, estado, partes, centros]);
+  }, [q, estado, partes, centros, usuarios]);
 
-  if (loadingPartes || loadingCentros) {
+  if (loadingPartes || loadingCentros || loadingUsuarios) {
     return (
       <div className="flex h-64 w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
