@@ -17,14 +17,14 @@ export const dataService = {
     const { data, error } = await supabase
       .from('partes')
       .select('*')
-      .order('fecha', { ascending: false });
+      .order('fecha_visita', { ascending: false });
     
     if (error) throw error;
     
     return (data || []).map(p => ({
       id: p.id,
       codigo: p.codigo,
-      fecha: p.fecha,
+      fecha: p.fecha_visita,
       centroId: p.centro_id,
       tecnicoId: p.tecnico_id,
       estado: p.estado as any,

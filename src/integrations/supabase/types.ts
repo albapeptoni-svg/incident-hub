@@ -68,7 +68,7 @@ export interface Database {
         Row: {
           id: string
           codigo: string
-          fecha: string
+          fecha_visita: string
           centro_id: string
           tecnico_id: string
           estado: string
@@ -79,7 +79,7 @@ export interface Database {
         Insert: {
           id?: string
           codigo: string
-          fecha?: string
+          fecha_visita?: string
           centro_id: string
           tecnico_id: string
           estado?: string
@@ -90,7 +90,7 @@ export interface Database {
         Update: {
           id?: string
           codigo?: string
-          fecha?: string
+          fecha_visita?: string
           centro_id?: string
           tecnico_id?: string
           estado?: string
