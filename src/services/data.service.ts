@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { Parte, Incidencia, Centro, Automatizacion, Usuario } from '@/types';
+import { Parte, Incidencia, Centro, Automatizacion, Usuario, Foto } from '@/types';
 
 export const dataService = {
   // Centros
@@ -96,6 +96,25 @@ export const dataService = {
       activo: u.activo,
       ultimoAcceso: u.ultimo_acceso || undefined,
       avatarUrl: u.avatar_url || undefined
+    }));
+  },
+
+  // Fotos
+  async getFotos(filters?: { parteId?: string; incidenciaId?: string }): Promise<Foto[]> {
+    let query = (supabase as any).from('fotos').select('*');
+    if (filters?.parteId) query = query.eq('parte_id', filters.parteId);
+    if (filters?.incidenciaId) query = query.eq('incidencia_id', filters.incidenciaId);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || []).map((f: any) => ({
+      id: f.id,
+      parteId: f.parte_id || undefined,
+      incidenciaId: f.incidencia_id || undefined,
+      url: f.url || f.public_url || f.storage_url || f.path || '',
+      descripcion: f.descripcion || f.description || undefined,
+      fechaCreacion: f.fecha_creacion || f.created_at || undefined
     }));
   }
 };
