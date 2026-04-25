@@ -10,7 +10,10 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Incidencia } from "@/types";
-import { categorias, grupos, temas } from "@/mocks";
+
+const temas = ["Climatización", "Iluminación", "Accesos", "General", "Limpieza", "Seguridad"];
+const categorias = ["HVAC", "Eléctrico", "Mecánico", "Otros", "Fisico"];
+const grupos = ["Mantenimiento Correctivo", "Mantenimiento Preventivo", "Información"];
 
 interface RevisionEditSheetProps {
   editing: Incidencia | null;
