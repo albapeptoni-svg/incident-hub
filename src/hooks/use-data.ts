@@ -1,23 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { dataService } from "@/services/data.service";
-import { 
-  partes as mockPartes, 
-  incidencias as mockIncidencias, 
-  centros as mockCentros,
-  automatizaciones as mockAutomatizaciones,
-  usuarios as mockUsuarios 
-} from "@/mocks";
-
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
-// Prioritize real data if Supabase is configured, fallback to mocks otherwise
-const USE_MOCKS = !isSupabaseConfigured;
+function assertSupabaseConfigured() {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase no está configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
+  }
+}
 
 export function usePartes() {
   return useQuery({
     queryKey: ["partes"],
     queryFn: async () => {
-      if (USE_MOCKS) return [];
+      assertSupabaseConfigured();
       try {
         return await dataService.getPartes();
       } catch (error) {
@@ -32,7 +27,7 @@ export function useIncidencias(parteId?: string) {
   return useQuery({
     queryKey: ["incidencias", parteId],
     queryFn: async () => {
-      if (USE_MOCKS) return [];
+      assertSupabaseConfigured();
       try {
         return await dataService.getIncidencias(parteId);
       } catch (error) {
@@ -47,7 +42,7 @@ export function useCentros() {
   return useQuery({
     queryKey: ["centros"],
     queryFn: async () => {
-      if (USE_MOCKS) return [];
+      assertSupabaseConfigured();
       try {
         return await dataService.getCentros();
       } catch (error) {
@@ -62,7 +57,7 @@ export function useAutomatizaciones() {
   return useQuery({
     queryKey: ["automatizaciones"],
     queryFn: async () => {
-      if (USE_MOCKS) return [];
+      assertSupabaseConfigured();
       try {
         return await dataService.getAutomatizaciones();
       } catch (error) {
@@ -77,11 +72,26 @@ export function useUsuarios() {
   return useQuery({
     queryKey: ["usuarios"],
     queryFn: async () => {
-      if (USE_MOCKS) return [];
+      assertSupabaseConfigured();
       try {
         return await dataService.getUsuarios();
       } catch (error) {
         console.error("Error fetching usuarios, falling back to empty:", error);
+        return [];
+      }
+    },
+  });
+}
+
+export function useFotos(parteId?: string, incidenciaId?: string) {
+  return useQuery({
+    queryKey: ["fotos", parteId, incidenciaId],
+    queryFn: async () => {
+      assertSupabaseConfigured();
+      try {
+        return await dataService.getFotos({ parteId, incidenciaId });
+      } catch (error) {
+        console.error("Error fetching fotos, falling back to empty:", error);
         return [];
       }
     },
