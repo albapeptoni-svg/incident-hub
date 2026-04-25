@@ -23,17 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      // Provide a mock admin session for preview environments
-      const mockUser = { id: 'mock-id', email: 'admin@siecbridge.io' } as User;
-      setSession({ user: mockUser } as Session);
-      setUser(mockUser);
-      setProfile({
-        id: 'mock-id',
-        nombre: 'Usuario (Preview)',
-        email: 'preview@siecbridge.io',
-        rol: 'admin',
-        activo: true
-      });
+      setSession(null);
+      setUser(null);
+      setProfile(null);
       setLoading(false);
       return;
     }

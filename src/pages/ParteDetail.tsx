@@ -2,8 +2,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Building2, Calendar, ClipboardCheck, FileText, Hash, MapPin, User, Loader2 } from "lucide-react";
-import { usePartes, useIncidencias, useCentros, useUsuarios } from "@/hooks/use-data";
+import { ArrowLeft, Building2, Calendar, ClipboardCheck, FileText, Hash, MapPin, User, Loader2, ImageIcon } from "lucide-react";
+import { usePartes, useIncidencias, useCentros, useUsuarios, useFotos } from "@/hooks/use-data";
 import { useMemo } from "react";
 
 export default function ParteDetail() {
@@ -16,8 +16,9 @@ export default function ParteDetail() {
   
   const parte = useMemo(() => partes.find((p) => p.id === id), [partes, id]);
   const { data: inc = [], isLoading: loadingInc } = useIncidencias(parte?.id);
+  const { data: fotos = [], isLoading: loadingFotos } = useFotos(parte?.id);
 
-  if (loadingPartes || loadingCentros || loadingUsuarios || (loadingInc && inc.length === 0)) {
+  if (loadingPartes || loadingCentros || loadingUsuarios || loadingFotos || (loadingInc && inc.length === 0)) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -139,6 +140,27 @@ export default function ParteDetail() {
           </div>
         </div>
       </div>
+
+      <section className="mt-6 surface-card p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-display text-base font-semibold">Fotos del parte</h3>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+            <ImageIcon className="h-3.5 w-3.5" /> {fotos.length}
+          </span>
+        </div>
+        {fotos.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {fotos.map((foto) => (
+              <figure key={foto.id} className="overflow-hidden rounded-lg border border-border bg-card">
+                <img src={foto.url} alt={foto.descripcion || `Foto del parte ${parte.codigo}`} className="aspect-video w-full object-cover" loading="lazy" />
+                {foto.descripcion && <figcaption className="px-3 py-2 text-xs text-muted-foreground">{foto.descripcion}</figcaption>}
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No hay fotos registradas en Supabase para este parte.</p>
+        )}
+      </section>
     </div>
   );
 }
