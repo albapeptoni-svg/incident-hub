@@ -9,6 +9,7 @@ import { RevisionStats } from "@/components/revision/RevisionStats";
 import { RevisionTable } from "@/components/revision/RevisionTable";
 import { RevisionEditSheet } from "@/components/revision/RevisionEditSheet";
 import { useIncidencias, usePartes, useCentros } from "@/hooks/use-data";
+import { addBatch } from "@/store/siecStore";
 
 export default function Revision() {
   const { toast } = useToast();
@@ -55,9 +56,32 @@ export default function Revision() {
   };
 
   const handlePrepareBatch = () => {
+    const seleccionadasIds = items
+      .filter((i) => i.crearEnSiec && i.estado === "aprobada")
+      .map((i) => i.id);
+
+    if (seleccionadasIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nada que preparar",
+        description: "Debes tener incidencias aprobadas y marcadas para el lote.",
+      });
+      return;
+    }
+
+    const nuevoLote = {
+      id: `lote-${Date.now()}`,
+      incidenciasIds: seleccionadasIds,
+      estado: "pendiente" as const,
+      creadoPor: "mock-admin-id",
+      fechaCreacion: new Date().toISOString(),
+    };
+
+    addBatch(nuevoLote);
+
     toast({
-      title: "Lote interno preparado",
-      description: `${seleccionadas} incidencias añadidas a la cola interna para revisión y simulación. No se ha enviado nada a SIEC.`,
+      title: "Lote creado",
+      description: `${seleccionadasIds.length} incidencias añadidas a la cola interna.`,
     });
   };
 
