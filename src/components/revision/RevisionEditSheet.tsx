@@ -37,7 +37,7 @@ export function RevisionEditSheet({ editing, onClose, onUpdateItem, onMarkAsRead
               </div>
               <SheetTitle className="font-display text-xl">Edición de incidencia</SheetTitle>
               <SheetDescription>
-                Revisa el texto OCR y ajusta los campos antes de enviar a SIEC.
+                Revisa el texto OCR y ajusta los campos antes de preparar el lote interno SIEC.
               </SheetDescription>
             </SheetHeader>
 
@@ -103,7 +103,7 @@ export function RevisionEditSheet({ editing, onClose, onUpdateItem, onMarkAsRead
                     onCheckedChange={(v) => onUpdateItem(editing.id, { crearEnSiec: !!v })}
                   />
                   <Label htmlFor="siec" className="cursor-pointer font-semibold">
-                    Crear esta incidencia en SIEC
+                    Incluir esta incidencia en el lote SIEC
                   </Label>
                 </div>
                 {!editing.crearEnSiec && (
@@ -121,7 +121,7 @@ export function RevisionEditSheet({ editing, onClose, onUpdateItem, onMarkAsRead
 
               <div className="flex items-start gap-2 rounded-lg bg-info/10 p-3 text-xs text-info">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>Los cambios se guardan automáticamente en este prototipo. La integración real con SIEC se conectará en la siguiente fase.</span>
+                <span>Los cambios se guardan automáticamente en este prototipo. Este paso solo prepara datos internos para simulación; no se enviará nada a SIEC.</span>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
