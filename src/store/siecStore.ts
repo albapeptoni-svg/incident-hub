@@ -1,11 +1,20 @@
 import { SiecBatch } from "@/types/siec";
 
-let batches: SiecBatch[] = [];
+const STORAGE_KEY = "siec_batches";
 
 export function getBatches(): SiecBatch[] {
-  return batches;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function addBatch(batch: SiecBatch) {
-  batches = [batch, ...batches];
+  const batches = getBatches();
+  const updated = [batch, ...batches];
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new Event("siec-batches-updated"));
 }

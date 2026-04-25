@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { getBatches } from "@/store/siecStore";
+import { SiecBatch } from "@/types/siec";
 
 function getQueueStatusLabel(estado: string) {
   if (estado === "simulado_ok") return "Simulado OK";
@@ -11,8 +13,22 @@ function getQueueStatusLabel(estado: string) {
 }
 
 export default function Cola() {
-  const lotes = getBatches();
+  const [lotes, setLotes] = useState<SiecBatch[]>(getBatches());
   const isLoading = false;
+
+  const refreshBatches = () => {
+    setLotes(getBatches());
+  };
+
+  useEffect(() => {
+    refreshBatches();
+
+    window.addEventListener("siec-batches-updated", refreshBatches);
+
+    return () => {
+      window.removeEventListener("siec-batches-updated", refreshBatches);
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -30,8 +46,12 @@ export default function Cola() {
         subtitle="Lotes preparados para revisión y simulación. No hay envío real a SIEC desde esta pantalla."
         actions={
           <>
-            <Button variant="outline" size="sm"><RefreshCw className="mr-2 h-4 w-4" /> Actualizar</Button>
-            <Button size="sm" className="bg-gradient-primary text-primary-foreground"><ShieldCheck className="mr-2 h-4 w-4" /> Simular validación</Button>
+            <Button variant="outline" size="sm" onClick={refreshBatches}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
+            </Button>
+            <Button size="sm" className="bg-gradient-primary text-primary-foreground">
+              <ShieldCheck className="mr-2 h-4 w-4" /> Simular validación
+            </Button>
           </>
         }
       />
@@ -41,7 +61,9 @@ export default function Cola() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="space-y-1">
             <p className="font-semibold">Cola interna sin envío real.</p>
-            <p>Estos lotes solo sirven para revisión y dry-run. El envío real a SIEC será irreversible y requerirá aprobación humana explícita.</p>
+            <p>
+              Estos lotes solo sirven para revisión y dry-run. El envío real a SIEC será irreversible y requerirá aprobación humana explícita.
+            </p>
           </div>
         </div>
       </div>
@@ -85,9 +107,11 @@ export default function Cola() {
                 <div
                   className={
                     "h-full rounded-full " +
-                    (l.estado === "simulado_ok" ? "bg-success w-full" :
-                      l.estado === "bloqueado" ? "bg-destructive w-1/3" :
-                      "bg-warning w-1/4")
+                    (l.estado === "simulado_ok"
+                      ? "bg-success w-full"
+                      : l.estado === "bloqueado"
+                        ? "bg-destructive w-1/3"
+                        : "bg-warning w-1/4")
                   }
                 />
               </div>
