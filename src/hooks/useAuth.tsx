@@ -29,8 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(mockUser);
       setProfile({
         id: 'mock-id',
-        nombre: 'Admin Lovable (Mock)',
-        email: 'admin@siecbridge.io',
+        nombre: 'Usuario (Preview)',
+        email: 'preview@siecbridge.io',
         rol: 'admin',
         activo: true
       });

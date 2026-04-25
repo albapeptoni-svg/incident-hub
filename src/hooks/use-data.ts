@@ -10,14 +10,20 @@ import {
 
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
-const USE_MOCKS = !isSupabaseConfigured || true; // Always true for now as requested in previous sessions, but now forced if no supabase
+// Prioritize real data if Supabase is configured, fallback to mocks otherwise
+const USE_MOCKS = !isSupabaseConfigured;
 
 export function usePartes() {
   return useQuery({
     queryKey: ["partes"],
     queryFn: async () => {
-      if (USE_MOCKS) return mockPartes;
-      return dataService.getPartes();
+      if (USE_MOCKS) return [];
+      try {
+        return await dataService.getPartes();
+      } catch (error) {
+        console.error("Error fetching partes, falling back to empty:", error);
+        return [];
+      }
     },
   });
 }
@@ -26,11 +32,13 @@ export function useIncidencias(parteId?: string) {
   return useQuery({
     queryKey: ["incidencias", parteId],
     queryFn: async () => {
-      if (USE_MOCKS) {
-        if (parteId) return mockIncidencias.filter(i => i.parteId === parteId);
-        return mockIncidencias;
+      if (USE_MOCKS) return [];
+      try {
+        return await dataService.getIncidencias(parteId);
+      } catch (error) {
+        console.error("Error fetching incidencias, falling back to empty:", error);
+        return [];
       }
-      return dataService.getIncidencias(parteId);
     },
   });
 }
@@ -39,8 +47,13 @@ export function useCentros() {
   return useQuery({
     queryKey: ["centros"],
     queryFn: async () => {
-      if (USE_MOCKS) return mockCentros;
-      return dataService.getCentros();
+      if (USE_MOCKS) return [];
+      try {
+        return await dataService.getCentros();
+      } catch (error) {
+        console.error("Error fetching centros, falling back to empty:", error);
+        return [];
+      }
     },
   });
 }
@@ -49,8 +62,13 @@ export function useAutomatizaciones() {
   return useQuery({
     queryKey: ["automatizaciones"],
     queryFn: async () => {
-      if (USE_MOCKS) return mockAutomatizaciones;
-      return dataService.getAutomatizaciones();
+      if (USE_MOCKS) return [];
+      try {
+        return await dataService.getAutomatizaciones();
+      } catch (error) {
+        console.error("Error fetching automatizaciones, falling back to empty:", error);
+        return [];
+      }
     },
   });
 }
@@ -59,8 +77,13 @@ export function useUsuarios() {
   return useQuery({
     queryKey: ["usuarios"],
     queryFn: async () => {
-      if (USE_MOCKS) return mockUsuarios;
-      return dataService.getUsuarios();
+      if (USE_MOCKS) return [];
+      try {
+        return await dataService.getUsuarios();
+      } catch (error) {
+        console.error("Error fetching usuarios, falling back to empty:", error);
+        return [];
+      }
     },
   });
 }
