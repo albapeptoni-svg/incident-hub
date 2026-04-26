@@ -35,18 +35,34 @@ export function getSiecHistory(): SiecHistoryItem[] {
   }
 }
 
+/**
+ * 🔒 IDEMPOTENTE:
+ * Solo guarda incidencias nuevas (no duplica histórico)
+ */
 export function addToSiecHistory(incidencias: Incidencia[]) {
   const current = getSiecHistory();
 
-  const nuevos: SiecHistoryItem[] = incidencias.map((incidencia) => ({
-    hash: buildIncidenciaHash(incidencia),
-    incidenciaId: incidencia.id,
-    fecha: new Date().toISOString(),
-  }));
+  const existentes = new Set(current.map((item) => item.hash));
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...nuevos, ...current]));
+  const nuevos = incidencias
+    .map((incidencia) => ({
+      hash: buildIncidenciaHash(incidencia),
+      incidenciaId: incidencia.id,
+      fecha: new Date().toISOString(),
+    }))
+    .filter((item) => !existentes.has(item.hash)); // 🔴 evita duplicados
+
+  if (nuevos.length === 0) return;
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify([...nuevos, ...current])
+  );
 }
 
+/**
+ * ⚠️ Detecta duplicados contra histórico
+ */
 export function detectHistoricalDuplicateWarnings(incidencias: Incidencia[]) {
   const history = getSiecHistory();
   const warnings: string[] = [];
