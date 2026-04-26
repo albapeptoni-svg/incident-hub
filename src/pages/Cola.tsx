@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck, Send } from "lucide-react";
 import {
   approveBatchForSend,
   getBatches,
+  sendBatchSimulated,
   simulateBatches,
   validateBatchBeforeSend,
 } from "@/store/siecStore";
@@ -17,6 +18,9 @@ function getQueueStatusLabel(estado: string) {
   if (estado === "bloqueado") return "Bloqueado por validación";
   if (estado === "aprobado_para_envio") return "Aprobado para envío";
   if (estado === "listo_para_envio") return "Listo para envío";
+  if (estado === "enviando_simulado") return "Enviando simulado";
+  if (estado === "enviado_simulado") return "Enviado simulado";
+  if (estado === "error_envio_simulado") return "Error envío simulado";
   return "Pendiente de simulación";
 }
 
@@ -122,6 +126,18 @@ export default function Cola() {
                 </div>
               )}
 
+              {l.fechaEnvioSimulado && (
+                <div className="mt-2 text-xs text-success">
+                  Envío simulado: {l.fechaEnvioSimulado}
+                </div>
+              )}
+
+              {l.respuestaSimulada && (
+                <div className="mt-3 rounded-md border border-info/30 bg-info/10 p-3 text-xs text-info">
+                  {l.respuestaSimulada}
+                </div>
+              )}
+
               {l.errores && l.errores.length > 0 && (
                 <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                   <p className="mb-2 font-semibold">Errores de validación:</p>
@@ -178,8 +194,33 @@ export default function Cola() {
               )}
 
               {l.estado === "listo_para_envio" && (
+                <>
+                  <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-success">
+                    Lote listo para una futura integración real. No se ha enviado nada a SIEC.
+                  </div>
+
+                  <Button
+                    className="mt-4 w-full bg-gradient-primary text-primary-foreground"
+                    onClick={() => {
+                      sendBatchSimulated(l.id);
+                      refreshBatches();
+                    }}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    Enviar simulado
+                  </Button>
+                </>
+              )}
+
+              {l.estado === "enviado_simulado" && (
                 <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-success">
-                  Lote listo para una futura integración real. No se ha enviado nada a SIEC.
+                  Envío simulado completado correctamente. Todavía no se ha enviado nada a SIEC real.
+                </div>
+              )}
+
+              {l.estado === "error_envio_simulado" && (
+                <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  El envío simulado ha fallado. Revisa errores antes de continuar.
                 </div>
               )}
             </div>
