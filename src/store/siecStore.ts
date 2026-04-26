@@ -53,9 +53,7 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
         }
 
         const incidenciaErrores = validateIncidencia(incidencia);
-        errores.push(
-          ...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`)
-        );
+        errores.push(...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`));
 
         return incidencia;
       })
@@ -63,8 +61,8 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
 
     const internalWarnings = detectDuplicateWarnings(incidenciasDelLote);
     const historicalWarnings = detectHistoricalDuplicateWarnings(incidenciasDelLote);
-
     const warnings = [...internalWarnings, ...historicalWarnings];
+
     const isOK = errores.length === 0;
 
     if (isOK) {
@@ -89,9 +87,7 @@ export function approveBatchForSend(batchId: string, userId = "mock-admin-id") {
   const updated = batches.map((batch) => {
     const hasErrors = Boolean(batch.errores && batch.errores.length > 0);
 
-    if (batch.id !== batchId) {
-      return batch;
-    }
+    if (batch.id !== batchId) return batch;
 
     if (batch.estado !== "simulado_ok" || hasErrors) {
       return {
@@ -109,6 +105,48 @@ export function approveBatchForSend(batchId: string, userId = "mock-admin-id") {
       estado: "aprobado_para_envio" as const,
       aprobadoPor: userId,
       fechaAprobacion: new Date().toISOString(),
+    };
+  });
+
+  saveBatches(updated);
+}
+
+export function validateBatchBeforeSend(batchId: string) {
+  const batches = getBatches();
+
+  const updated = batches.map((batch) => {
+    if (batch.id !== batchId) return batch;
+
+    const erroresFinales: string[] = [];
+
+    if (batch.estado !== "aprobado_para_envio") {
+      erroresFinales.push("El lote debe estar aprobado manualmente antes del pre-envío.");
+    }
+
+    if (batch.errores && batch.errores.length > 0) {
+      erroresFinales.push("El lote contiene errores de validación pendientes.");
+    }
+
+    if (!batch.payloadPreview || batch.payloadPreview.length === 0) {
+      erroresFinales.push("El lote no tiene payload SIEC generado.");
+    }
+
+    if (!batch.incidenciasIds || batch.incidenciasIds.length === 0) {
+      erroresFinales.push("El lote no contiene incidencias.");
+    }
+
+    if (erroresFinales.length > 0) {
+      return {
+        ...batch,
+        estado: "bloqueado" as const,
+        errores: [...(batch.errores ?? []), ...erroresFinales],
+      };
+    }
+
+    return {
+      ...batch,
+      estado: "listo_para_envio" as const,
+      fechaPreEnvioOk: new Date().toISOString(),
     };
   });
 

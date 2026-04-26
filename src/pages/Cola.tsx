@@ -3,7 +3,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
-import { getBatches, simulateBatches, approveBatchForSend } from "@/store/siecStore";
+import {
+  approveBatchForSend,
+  getBatches,
+  simulateBatches,
+  validateBatchBeforeSend,
+} from "@/store/siecStore";
 import { SiecBatch } from "@/types/siec";
 import { useIncidencias } from "@/hooks/use-data";
 
@@ -11,6 +16,7 @@ function getQueueStatusLabel(estado: string) {
   if (estado === "simulado_ok") return "Simulado OK";
   if (estado === "bloqueado") return "Bloqueado por validación";
   if (estado === "aprobado_para_envio") return "Aprobado para envío";
+  if (estado === "listo_para_envio") return "Listo para envío";
   return "Pendiente de simulación";
 }
 
@@ -110,6 +116,12 @@ export default function Cola() {
                 </div>
               )}
 
+              {l.fechaPreEnvioOk && (
+                <div className="mt-2 text-xs text-success">
+                  Pre-envío validado: {l.fechaPreEnvioOk}
+                </div>
+              )}
+
               {l.errores && l.errores.length > 0 && (
                 <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                   <p className="mb-2 font-semibold">Errores de validación:</p>
@@ -141,7 +153,6 @@ export default function Cola() {
                 </div>
               )}
 
-              {/* 🔴 BOTÓN CLAVE */}
               {l.estado === "simulado_ok" && (
                 <Button
                   className="mt-4 w-full bg-success text-white"
@@ -152,6 +163,24 @@ export default function Cola() {
                 >
                   Aprobar para envío
                 </Button>
+              )}
+
+              {l.estado === "aprobado_para_envio" && (
+                <Button
+                  className="mt-4 w-full bg-primary text-primary-foreground"
+                  onClick={() => {
+                    validateBatchBeforeSend(l.id);
+                    refreshBatches();
+                  }}
+                >
+                  Validar pre-envío
+                </Button>
+              )}
+
+              {l.estado === "listo_para_envio" && (
+                <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-success">
+                  Lote listo para una futura integración real. No se ha enviado nada a SIEC.
+                </div>
               )}
             </div>
           ))}

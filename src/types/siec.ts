@@ -7,7 +7,8 @@ export type SiecBatch = {
     | "pendiente"
     | "simulado_ok"
     | "bloqueado"
-    | "aprobado_para_envio";
+    | "aprobado_para_envio"
+    | "listo_para_envio";
   creadoPor: string;
   fechaCreacion: string;
   errores?: string[];
@@ -15,4 +16,5 @@ export type SiecBatch = {
   payloadPreview?: SiecPayloadItem[];
   aprobadoPor?: string;
   fechaAprobacion?: string;
+  fechaPreEnvioOk?: string;
 };
