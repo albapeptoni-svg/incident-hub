@@ -8,7 +8,11 @@ function normalizeDataMode(value: unknown): DataMode {
     : "auto";
 }
 
-export const dataMode = normalizeDataMode(import.meta.env.VITE_DATA_MODE);
+const FORCE_MOCK_MODE = true;
+
+export const dataMode: DataMode = FORCE_MOCK_MODE
+  ? "mock"
+  : normalizeDataMode(import.meta.env.VITE_DATA_MODE);
 
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
