@@ -61,17 +61,12 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
       })
       .filter((item): item is Incidencia => item !== null);
 
-    // 🔹 Duplicados internos (mismo lote)
     const internalWarnings = detectDuplicateWarnings(incidenciasDelLote);
-
-    // 🔹 Duplicados históricos (lotes anteriores)
     const historicalWarnings = detectHistoricalDuplicateWarnings(incidenciasDelLote);
 
     const warnings = [...internalWarnings, ...historicalWarnings];
-
     const isOK = errores.length === 0;
 
-    // 🔹 SOLO si todo está OK → guardamos en histórico
     if (isOK) {
       addToSiecHistory(incidenciasDelLote);
     }
@@ -82,6 +77,38 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
       errores,
       warnings,
       payloadPreview: isOK ? buildSiecPayload(incidenciasDelLote) : undefined,
+    };
+  });
+
+  saveBatches(updated);
+}
+
+export function approveBatchForSend(batchId: string, userId = "mock-admin-id") {
+  const batches = getBatches();
+
+  const updated = batches.map((batch) => {
+    const hasErrors = Boolean(batch.errores && batch.errores.length > 0);
+
+    if (batch.id !== batchId) {
+      return batch;
+    }
+
+    if (batch.estado !== "simulado_ok" || hasErrors) {
+      return {
+        ...batch,
+        estado: "bloqueado" as const,
+        errores: [
+          ...(batch.errores ?? []),
+          "No se puede aprobar para envío: el lote debe estar simulado OK y sin errores.",
+        ],
+      };
+    }
+
+    return {
+      ...batch,
+      estado: "aprobado_para_envio" as const,
+      aprobadoPor: userId,
+      fechaAprobacion: new Date().toISOString(),
     };
   });
 
