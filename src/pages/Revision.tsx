@@ -4,66 +4,116 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Incidencia } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Search, X, CheckCheck, Loader2 } from "lucide-react";
+import { AlertTriangle, ClipboardList, Search, X, CheckCheck, Loader2 } from "lucide-react";
 import { RevisionStats } from "@/components/revision/RevisionStats";
 import { RevisionTable } from "@/components/revision/RevisionTable";
 import { RevisionEditSheet } from "@/components/revision/RevisionEditSheet";
 import { useIncidencias, usePartes, useCentros } from "@/hooks/use-data";
+import { addBatch } from "@/store/siecStore";
 
 export default function Revision() {
   const { toast } = useToast();
   const { data: allPartes = [], isLoading: loadingPartes } = usePartes();
   const { data: allCentros = [], isLoading: loadingCentros } = useCentros();
-  
-  // For this view we'll assume we are reviewing the first available "en_revision" parte
-  const parte = useMemo(() => allPartes.find(p => p.estado === 'en_revision') || allPartes[0], [allPartes]);
-  const { data: initialIncidencias = [], isLoading: loadingIncidencias } = useIncidencias(parte?.id);
-  
+
+  // Parte en revisión
+  const parte = useMemo(
+    () => allPartes.find((p) => p.estado === "en_revision") || allPartes[0],
+    [allPartes]
+  );
+
+  const { data: initialIncidencias = [], isLoading: loadingIncidencias } =
+    useIncidencias(parte?.id);
+
   const [items, setItems] = useState<Incidencia[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
-  // Update local state when hook data arrives
+  // Cargar incidencias
   useEffect(() => {
     if (initialIncidencias.length > 0) {
       setItems(initialIncidencias);
     }
   }, [initialIncidencias]);
 
+  // Seleccionadas para lote
   const seleccionadas = items.filter((i) => i.crearEnSiec).length;
-  const filtered = useMemo(() =>
-    items.filter((i) =>
-      !q ||
-      i.textoCorregido.toLowerCase().includes(q.toLowerCase()) ||
-      i.tema.toLowerCase().includes(q.toLowerCase()) ||
-      i.categoria.toLowerCase().includes(q.toLowerCase()),
-    ), [items, q]);
 
-  const centro = allCentros.find(c => c.id === parte?.centroId);
+  // Filtro búsqueda
+  const filtered = useMemo(
+    () =>
+      items.filter(
+        (i) =>
+          !q ||
+          i.textoCorregido.toLowerCase().includes(q.toLowerCase()) ||
+          i.tema.toLowerCase().includes(q.toLowerCase()) ||
+          i.categoria.toLowerCase().includes(q.toLowerCase())
+      ),
+    [items, q]
+  );
+
+  const centro = allCentros.find((c) => c.id === parte?.centroId);
   const editing = items.find((i) => i.id === open) ?? null;
 
+  // Actualizar incidencia
   const updateItem = (id: string, patch: Partial<Incidencia>) => {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, ...patch } : i))
+    );
   };
 
+  // Marcar todas
   const toggleAll = (val: boolean) => {
-    setItems((prev) => prev.map((i) => i.estado === "descartada" ? i : { ...i, crearEnSiec: val }));
+    setItems((prev) =>
+      prev.map((i) =>
+        i.estado === "descartada" ? i : { ...i, crearEnSiec: val }
+      )
+    );
   };
 
+  // Aprobar incidencia
   const handleMarkAsReady = (id: string) => {
     updateItem(id, { estado: "aprobada" });
     setOpen(null);
     toast({ title: "Incidencia marcada como lista (aprobada)" });
   };
 
-  const handleSend = () => {
+  // 🔥 CREAR LOTE REAL (persistente)
+  const handlePrepareBatch = () => {
+    const seleccionadasIds = items
+      .filter((i) => i.crearEnSiec && i.estado === "aprobada")
+      .map((i) => i.id);
+
+    if (seleccionadasIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nada que preparar",
+        description:
+          "Debes tener incidencias aprobadas y marcadas para el lote.",
+      });
+      return;
+    }
+
+    addBatch({
+      id: `lote-${Date.now()}`,
+      incidenciasIds: seleccionadasIds,
+      estado: "pendiente",
+      creadoPor: "mock-admin-id",
+      fechaCreacion: new Date().toISOString(),
+    });
+
     toast({
-      title: "Lote preparado para SIEC",
-      description: `${seleccionadas} incidencias añadidas a la cola de envío. (Demo visual)`,
+      title: "Lote interno creado",
+      description: `${seleccionadasIds.length} incidencias añadidas a la cola.`,
     });
   };
 
-  if (loadingPartes || loadingCentros || (loadingIncidencias && items.length === 0)) {
+  // Loading
+  if (
+    loadingPartes ||
+    loadingCentros ||
+    (loadingIncidencias && items.length === 0)
+  ) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -71,10 +121,13 @@ export default function Revision() {
     );
   }
 
+  // Sin datos
   if (!parte) {
     return (
       <div className="p-8 text-center">
-        <p className="text-muted-foreground">No hay partes disponibles para revisión.</p>
+        <p className="text-muted-foreground">
+          No hay partes disponibles para revisión.
+        </p>
       </div>
     );
   }
@@ -82,23 +135,53 @@ export default function Revision() {
   return (
     <div>
       <PageHeader
-        eyebrow={`Parte ${parte.codigo} · ${centro?.nombre || '...'}`}
+        eyebrow={`Parte ${parte.codigo} · ${centro?.nombre || "..."}`}
         title="Revisión de incidencias"
-        subtitle="Valida el OCR, corrige campos y selecciona qué incidencias se enviarán a SIEC."
+        subtitle="Valida el OCR, corrige campos y selecciona qué incidencias formarán parte de un lote interno SIEC."
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => toggleAll(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleAll(true)}
+            >
               <CheckCheck className="mr-2 h-4 w-4" /> Marcar todas
             </Button>
-            <Button variant="outline" size="sm" onClick={() => toggleAll(false)}>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleAll(false)}
+            >
               <X className="mr-2 h-4 w-4" /> Desmarcar
             </Button>
-            <Button onClick={handleSend} className="bg-gradient-primary text-primary-foreground shadow-md">
-              <Send className="mr-2 h-4 w-4" /> Enviar a SIEC ({seleccionadas})
+
+            <Button
+              onClick={handlePrepareBatch}
+              className="bg-gradient-primary text-primary-foreground shadow-md"
+            >
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Preparar lote SIEC ({seleccionadas})
             </Button>
           </>
         }
       />
+
+      {/* ⚠️ Aviso */}
+      <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+        <div className="flex gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold">
+              No se enviará nada a SIEC todavía.
+            </p>
+            <p>
+              Este paso solo prepara un lote interno para revisión y simulación.
+              El envío real será irreversible y requerirá aprobación humana.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <RevisionStats items={items} seleccionadas={seleccionadas} />
 
@@ -106,22 +189,29 @@ export default function Revision() {
       <div className="mb-3 flex items-center gap-2">
         <div className="relative flex-1 max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar texto, tema, categoría..." className="h-10 pl-10" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar texto, tema, categoría..."
+            className="h-10 pl-10"
+          />
         </div>
-        <p className="text-xs text-muted-foreground">{filtered.length} resultados</p>
+        <p className="text-xs text-muted-foreground">
+          {filtered.length} resultados
+        </p>
       </div>
 
-      <RevisionTable 
-        items={filtered} 
-        onUpdateItem={updateItem} 
-        onEdit={setOpen} 
+      <RevisionTable
+        items={filtered}
+        onUpdateItem={updateItem}
+        onEdit={setOpen}
       />
 
-      <RevisionEditSheet 
-        editing={editing} 
-        onClose={() => setOpen(null)} 
-        onUpdateItem={updateItem} 
-        onMarkAsReady={handleMarkAsReady} 
+      <RevisionEditSheet
+        editing={editing}
+        onClose={() => setOpen(null)}
+        onUpdateItem={updateItem}
+        onMarkAsReady={handleMarkAsReady}
       />
     </div>
   );
