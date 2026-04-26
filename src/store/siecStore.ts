@@ -11,10 +11,21 @@ export function getBatches(): SiecBatch[] {
   }
 }
 
+export function saveBatches(batches: SiecBatch[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(batches));
+  window.dispatchEvent(new Event("siec-batches-updated"));
+}
+
 export function addBatch(batch: SiecBatch) {
   const batches = getBatches();
-  const updated = [batch, ...batches];
+  saveBatches([batch, ...batches]);
+}
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  window.dispatchEvent(new Event("siec-batches-updated"));
+export function updateBatch(batchId: string, patch: Partial<SiecBatch>) {
+  const batches = getBatches();
+  const updated = batches.map((batch) =>
+    batch.id === batchId ? { ...batch, ...patch } : batch
+  );
+
+  saveBatches(updated);
 }
