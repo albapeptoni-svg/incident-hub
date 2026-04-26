@@ -137,9 +137,7 @@ export default function Cola() {
                 <StatusBadge estado={l.estado} label={getQueueStatusLabel(l.estado)} />
               </div>
 
-              <div className="mt-3 text-sm">
-                Incidencias: {l.incidenciasIds.length}
-              </div>
+              <div className="mt-3 text-sm">Incidencias: {l.incidenciasIds.length}</div>
 
               <div className="mt-2 text-xs text-muted-foreground">
                 Usuario: {l.creadoPor}
@@ -282,9 +280,22 @@ export default function Cola() {
               )}
 
               {l.estado === "error_envio_simulado" && (
-                <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                  El envío simulado ha fallado. Revisa errores antes de continuar.
-                </div>
+                <>
+                  <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                    El envío simulado ha fallado. Puedes revisar errores o reintentar el envío simulado.
+                  </div>
+
+                  <Button
+                    className="mt-4 w-full bg-gradient-primary text-primary-foreground"
+                    onClick={() => {
+                      sendBatchSimulated(l.id);
+                      refreshBatches();
+                    }}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    Reintentar envío simulado
+                  </Button>
+                </>
               )}
             </div>
           ))}
