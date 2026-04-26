@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck, Send, History } from "lucide-react";
+import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck, Send, History, Download } from "lucide-react";
 import {
   approveBatchForSend,
   getBatches,
@@ -22,6 +22,37 @@ function getQueueStatusLabel(estado: string) {
   if (estado === "enviado_simulado") return "Enviado simulado";
   if (estado === "error_envio_simulado") return "Error envío simulado";
   return "Pendiente de simulación";
+}
+
+function exportBatchToCSV(batch: SiecBatch) {
+  if (!batch.payloadPreview || batch.payloadPreview.length === 0) {
+    alert("No hay datos para exportar.");
+    return;
+  }
+
+  const headers = Object.keys(batch.payloadPreview[0]);
+
+  const rows = batch.payloadPreview.map((item) =>
+    headers
+      .map((header) => {
+        const value = item[header as keyof typeof item] ?? "";
+        return `"${String(value).replace(/"/g, '""')}"`;
+      })
+      .join(";")
+  );
+
+  const csvContent = [headers.join(";"), ...rows].join("\n");
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `lote_${batch.id}.csv`;
+  link.click();
+
+  URL.revokeObjectURL(url);
 }
 
 export default function Cola() {
@@ -188,6 +219,17 @@ export default function Cola() {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {l.payloadPreview && l.payloadPreview.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="mt-4 w-full"
+                  onClick={() => exportBatchToCSV(l)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Exportar CSV
+                </Button>
               )}
 
               {l.estado === "simulado_ok" && (
