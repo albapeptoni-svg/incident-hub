@@ -44,6 +44,7 @@ export function saveBatches(batches: SiecBatch[]) {
 
 export function addBatch(batch: SiecBatch) {
   const batches = getBatches();
+
   saveBatches([
     {
       ...batch,
@@ -58,6 +59,7 @@ export function addBatch(batch: SiecBatch) {
 
 export function updateBatch(batchId: string, patch: Partial<SiecBatch>) {
   const batches = getBatches();
+
   const updated = batches.map((batch) =>
     batch.id === batchId ? { ...batch, ...patch } : batch
   );
@@ -203,16 +205,17 @@ export function validateBatchBeforeSend(batchId: string) {
 export async function sendBatchSimulated(batchId: string) {
   const batch = getBatches().find((item) => item.id === batchId);
 
-  if (!batch) {
-    return;
-  }
+  if (!batch) return;
 
-  if (batch.estado !== "listo_para_envio") {
+  const canSend =
+    batch.estado === "listo_para_envio" || batch.estado === "error_envio_simulado";
+
+  if (!canSend) {
     updateBatch(batchId, {
       estado: "error_envio_simulado",
       errores: [
         ...(batch.errores ?? []),
-        "No se puede simular el envío: el lote debe estar en estado listo_para_envio.",
+        "No se puede simular el envío: el lote debe estar listo para envío o en error de envío simulado.",
       ],
       respuestaSimulada: "ERROR_SIMULADO: lote no preparado para envío.",
       logs: appendLog(batch, createLog("error", "Envío simulado rechazado: lote no preparado.")),
@@ -243,9 +246,7 @@ export async function sendBatchSimulated(batchId: string) {
 
   const latestBatch = getBatches().find((item) => item.id === batchId);
 
-  if (!latestBatch || latestBatch.estado !== "enviando_simulado") {
-    return;
-  }
+  if (!latestBatch || latestBatch.estado !== "enviando_simulado") return;
 
   if (shouldSimulateSendError()) {
     updateBatch(batchId, {
