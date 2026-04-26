@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { getBatches, simulateBatches } from "@/store/siecStore";
 import { SiecBatch } from "@/types/siec";
 import { useIncidencias } from "@/hooks/use-data";
@@ -104,10 +104,24 @@ export default function Cola() {
               </div>
 
               {l.errores && l.errores.length > 0 && (
-                <div className="mt-3 text-xs text-destructive">
-                  {l.errores.slice(0, 3).map((e, i) => (
+                <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  <p className="mb-2 font-semibold">Errores de validación:</p>
+                  {l.errores.slice(0, 5).map((e, i) => (
                     <p key={i}>• {e}</p>
                   ))}
+                </div>
+              )}
+
+              {l.payloadPreview && l.payloadPreview.length > 0 && (
+                <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Code2 className="h-3.5 w-3.5" />
+                    Preview payload SIEC
+                  </div>
+
+                  <pre className="max-h-64 overflow-auto rounded bg-background p-3 text-[11px] leading-relaxed">
+                    {JSON.stringify(l.payloadPreview, null, 2)}
+                  </pre>
                 </div>
               )}
             </div>
