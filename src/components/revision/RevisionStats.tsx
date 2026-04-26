@@ -1,4 +1,4 @@
-import { FileScan, CheckCheck, AlertTriangle, Send } from "lucide-react";
+import { FileScan, CheckCheck, AlertTriangle, ClipboardList } from "lucide-react";
 import { cn } from "@/utils";
 import { Incidencia } from "@/types";
 
@@ -12,7 +12,7 @@ export function RevisionStats({ items, seleccionadas }: RevisionStatsProps) {
     { label: "Total", value: items.length, icon: FileScan, color: "text-foreground bg-muted" },
     { label: "Listas", value: items.filter((i) => i.estado === "aprobada").length, icon: CheckCheck, color: "text-success bg-success/10" },
     { label: "En revisión", value: items.filter((i) => ["corregida", "pendiente"].includes(i.estado)).length, icon: AlertTriangle, color: "text-warning bg-warning/10" },
-    { label: "A enviar SIEC", value: seleccionadas, icon: Send, color: "text-primary bg-primary/10" },
+    { label: "Para lote SIEC", value: seleccionadas, icon: ClipboardList, color: "text-primary bg-primary/10" },
   ];
 
   return (
