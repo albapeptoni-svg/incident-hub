@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/utils";
 import { useAuth } from "@/hooks/useAuth";
+import logoLcc from "@/assets/logo-lcc.png";
 import {
   LayoutDashboard,
   FileText,
@@ -22,16 +23,15 @@ import {
   History,
   Settings,
   ShieldCheck,
-  Zap,
   LogOut,
 } from "lucide-react";
 
 const mainItems = [
-  { title: "Dashboard",   url: "/dashboard",   icon: LayoutDashboard },
-  { title: "Partes",      url: "/partes",      icon: FileText },
-  { title: "Revisión",    url: "/revision",    icon: ClipboardCheck },
-  { title: "Cola SIEC",   url: "/cola",        icon: Workflow },
-  { title: "Historial",   url: "/historial",   icon: History },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Partes", url: "/partes", icon: FileText },
+  { title: "Revisión", url: "/revision", icon: ClipboardCheck },
+  { title: "Cola SIEC", url: "/cola", icon: Workflow },
+  { title: "Historial", url: "/historial", icon: History },
 ];
 
 const adminItems = [
@@ -46,6 +46,7 @@ export function Sidebar() {
 
   const renderItem = (item: { title: string; url: string; icon: typeof LayoutDashboard; badge?: string }) => {
     const active = location.pathname.startsWith(item.url);
+
     return (
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton asChild className="h-10">
@@ -61,7 +62,9 @@ export function Sidebar() {
             {active && (
               <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-primary" />
             )}
+
             <item.icon className="h-4 w-4 shrink-0" />
+
             {!collapsed && (
               <>
                 <span className="flex-1">{item.title}</span>
@@ -81,14 +84,24 @@ export function Sidebar() {
   return (
     <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-accent shadow-glow">
-            <Zap className="h-5 w-5 text-white" strokeWidth={2.5} />
-          </div>
+        <div className="flex items-center gap-3">
+          <img
+            src={logoLcc}
+            alt="SIEC Bridge LCC"
+            className={cn(
+              "shrink-0 object-contain",
+              collapsed ? "h-10 w-10" : "h-12 w-12"
+            )}
+          />
+
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-base font-bold text-sidebar-foreground">SIEC Bridge LCC</span>
-              <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">Control Center</span>
+              <span className="font-display text-base font-bold text-sidebar-foreground">
+                SIEC Bridge LCC
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
+                Centro de Control
+              </span>
             </div>
           )}
         </div>
@@ -101,6 +114,7 @@ export function Sidebar() {
               Principal
             </SidebarGroupLabel>
           )}
+
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">{mainItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
@@ -112,6 +126,7 @@ export function Sidebar() {
               Administración
             </SidebarGroupLabel>
           )}
+
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">{adminItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
@@ -130,9 +145,10 @@ export function Sidebar() {
                 API operativa · v2.4.1
               </p>
             </div>
-            <button 
+
+            <button
               onClick={() => signOut()}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
               <LogOut className="h-4 w-4" />
               <span>Cerrar sesión</span>
