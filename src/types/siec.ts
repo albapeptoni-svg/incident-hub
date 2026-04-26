@@ -1,5 +1,17 @@
 import { SiecPayloadItem } from "@/store/siecPayload";
 
+export type SiecBatchLog = {
+  id: string;
+  fecha: string;
+  tipo:
+    | "simulacion"
+    | "aprobacion"
+    | "pre_envio"
+    | "envio_simulado"
+    | "error";
+  mensaje: string;
+};
+
 export type SiecBatch = {
   id: string;
   incidenciasIds: string[];
@@ -28,4 +40,6 @@ export type SiecBatch = {
 
   fechaEnvioSimulado?: string;
   respuestaSimulada?: string;
+
+  logs?: SiecBatchLog[];
 };

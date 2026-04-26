@@ -1,5 +1,5 @@
 import { Incidencia } from "@/types";
-import { SiecBatch } from "@/types/siec";
+import { SiecBatch, SiecBatchLog } from "@/types/siec";
 import { detectDuplicateWarnings, validateIncidencia } from "@/store/siecValidation";
 import { buildSiecPayload } from "@/store/siecPayload";
 import {
@@ -14,6 +14,19 @@ const MOCK_ERROR_RATE = 0.2;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const shouldSimulateSendError = () => Math.random() < MOCK_ERROR_RATE;
+
+function createLog(tipo: SiecBatchLog["tipo"], mensaje: string): SiecBatchLog {
+  return {
+    id: `log-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    fecha: new Date().toISOString(),
+    tipo,
+    mensaje,
+  };
+}
+
+function appendLog(batch: SiecBatch, log: SiecBatchLog) {
+  return [...(batch.logs ?? []), log];
+}
 
 export function getBatches(): SiecBatch[] {
   try {
@@ -31,7 +44,16 @@ export function saveBatches(batches: SiecBatch[]) {
 
 export function addBatch(batch: SiecBatch) {
   const batches = getBatches();
-  saveBatches([batch, ...batches]);
+  saveBatches([
+    {
+      ...batch,
+      logs: [
+        ...(batch.logs ?? []),
+        createLog("simulacion", "Lote interno creado para revisión SIEC."),
+      ],
+    },
+    ...batches,
+  ]);
 }
 
 export function updateBatch(batchId: string, patch: Partial<SiecBatch>) {
@@ -81,6 +103,15 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
       errores,
       warnings,
       payloadPreview: isOK ? buildSiecPayload(incidenciasDelLote) : undefined,
+      logs: appendLog(
+        batch,
+        createLog(
+          isOK ? "simulacion" : "error",
+          isOK
+            ? `Simulación OK: ${incidenciasDelLote.length} incidencia(s) validadas.`
+            : `Simulación bloqueada: ${errores.length} error(es) detectados.`
+        )
+      ),
     };
   });
 
@@ -103,6 +134,10 @@ export function approveBatchForSend(batchId: string, userId = "mock-admin-id") {
           ...(batch.errores ?? []),
           "No se puede aprobar para envío: el lote debe estar simulado OK y sin errores.",
         ],
+        logs: appendLog(
+          batch,
+          createLog("error", "Aprobación rechazada: el lote no está simulado OK o contiene errores.")
+        ),
       };
     }
 
@@ -111,6 +146,7 @@ export function approveBatchForSend(batchId: string, userId = "mock-admin-id") {
       estado: "aprobado_para_envio" as const,
       aprobadoPor: userId,
       fechaAprobacion: new Date().toISOString(),
+      logs: appendLog(batch, createLog("aprobacion", `Lote aprobado manualmente por ${userId}.`)),
     };
   });
 
@@ -146,6 +182,10 @@ export function validateBatchBeforeSend(batchId: string) {
         ...batch,
         estado: "bloqueado" as const,
         errores: [...(batch.errores ?? []), ...erroresFinales],
+        logs: appendLog(
+          batch,
+          createLog("error", `Pre-envío bloqueado: ${erroresFinales.length} error(es) finales.`)
+        ),
       };
     }
 
@@ -153,6 +193,7 @@ export function validateBatchBeforeSend(batchId: string) {
       ...batch,
       estado: "listo_para_envio" as const,
       fechaPreEnvioOk: new Date().toISOString(),
+      logs: appendLog(batch, createLog("pre_envio", "Validación final de pre-envío superada.")),
     };
   });
 
@@ -174,6 +215,7 @@ export async function sendBatchSimulated(batchId: string) {
         "No se puede simular el envío: el lote debe estar en estado listo_para_envio.",
       ],
       respuestaSimulada: "ERROR_SIMULADO: lote no preparado para envío.",
+      logs: appendLog(batch, createLog("error", "Envío simulado rechazado: lote no preparado.")),
     });
     return;
   }
@@ -186,6 +228,7 @@ export async function sendBatchSimulated(batchId: string) {
         "No se puede simular el envío: falta payloadPreview.",
       ],
       respuestaSimulada: "ERROR_SIMULADO: payload vacío.",
+      logs: appendLog(batch, createLog("error", "Envío simulado rechazado: payload vacío.")),
     });
     return;
   }
@@ -193,6 +236,7 @@ export async function sendBatchSimulated(batchId: string) {
   updateBatch(batchId, {
     estado: "enviando_simulado",
     respuestaSimulada: "ENVIANDO_SIMULADO: enviando lote al mock de SIEC...",
+    logs: appendLog(batch, createLog("envio_simulado", "Inicio de envío simulado al mock SIEC.")),
   });
 
   await wait(MOCK_SEND_DELAY_MS);
@@ -211,6 +255,10 @@ export async function sendBatchSimulated(batchId: string) {
         "Error simulado de comunicación con SIEC mock.",
       ],
       respuestaSimulada: "ERROR_SIMULADO: fallo temporal de comunicación con SIEC mock.",
+      logs: appendLog(
+        latestBatch,
+        createLog("error", "Fallo temporal simulado de comunicación con SIEC mock.")
+      ),
     });
     return;
   }
@@ -219,5 +267,12 @@ export async function sendBatchSimulated(batchId: string) {
     estado: "enviado_simulado",
     fechaEnvioSimulado: new Date().toISOString(),
     respuestaSimulada: `OK_SIMULADO: ${latestBatch.payloadPreview?.length ?? 0} incidencia(s) aceptadas por SIEC mock.`,
+    logs: appendLog(
+      latestBatch,
+      createLog(
+        "envio_simulado",
+        `Envío simulado completado: ${latestBatch.payloadPreview?.length ?? 0} incidencia(s) aceptadas.`
+      )
+    ),
   });
 }
