@@ -112,6 +112,15 @@ export default function Cola() {
                 </div>
               )}
 
+              {l.warnings && l.warnings.length > 0 && (
+                <div className="mt-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                  <p className="mb-2 font-semibold">Avisos / posibles duplicados:</p>
+                  {l.warnings.slice(0, 5).map((warning, i) => (
+                    <p key={i}>• {warning}</p>
+                  ))}
+                </div>
+              )}
+
               {l.payloadPreview && l.payloadPreview.length > 0 && (
                 <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

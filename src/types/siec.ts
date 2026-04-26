@@ -7,5 +7,6 @@ export type SiecBatch = {
   creadoPor: string;
   fechaCreacion: string;
   errores?: string[];
+  warnings?: string[];
   payloadPreview?: SiecPayloadItem[];
 };
