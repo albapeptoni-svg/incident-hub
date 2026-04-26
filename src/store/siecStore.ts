@@ -1,7 +1,11 @@
 import { Incidencia } from "@/types";
 import { SiecBatch } from "@/types/siec";
-import { validateIncidencia } from "@/store/siecValidation";
+import { detectDuplicateWarnings, validateIncidencia } from "@/store/siecValidation";
 import { buildSiecPayload } from "@/store/siecPayload";
+import {
+  detectHistoricalDuplicateWarnings,
+  addToSiecHistory,
+} from "@/store/siecHistory";
 
 const STORAGE_KEY = "siec_batches";
 
@@ -49,17 +53,35 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
         }
 
         const incidenciaErrores = validateIncidencia(incidencia);
-        errores.push(...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`));
+        errores.push(
+          ...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`)
+        );
 
         return incidencia;
       })
       .filter((item): item is Incidencia => item !== null);
 
+    // 🔹 Duplicados internos (mismo lote)
+    const internalWarnings = detectDuplicateWarnings(incidenciasDelLote);
+
+    // 🔹 Duplicados históricos (lotes anteriores)
+    const historicalWarnings = detectHistoricalDuplicateWarnings(incidenciasDelLote);
+
+    const warnings = [...internalWarnings, ...historicalWarnings];
+
+    const isOK = errores.length === 0;
+
+    // 🔹 SOLO si todo está OK → guardamos en histórico
+    if (isOK) {
+      addToSiecHistory(incidenciasDelLote);
+    }
+
     return {
       ...batch,
-      estado: errores.length > 0 ? "bloqueado" as const : "simulado_ok" as const,
+      estado: isOK ? "simulado_ok" as const : "bloqueado" as const,
       errores,
-      payloadPreview: errores.length === 0 ? buildSiecPayload(incidenciasDelLote) : undefined,
+      warnings,
+      payloadPreview: isOK ? buildSiecPayload(incidenciasDelLote) : undefined,
     };
   });
 

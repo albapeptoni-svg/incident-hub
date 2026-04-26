@@ -1,5 +1,13 @@
 import { Incidencia } from "@/types";
 
+function normalizar(texto?: string) {
+  return (texto ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 export function validateIncidencia(i: Incidencia): string[] {
   const errores: string[] = [];
 
@@ -32,4 +40,28 @@ export function validateIncidencia(i: Incidencia): string[] {
   }
 
   return errores;
+}
+
+export function detectDuplicateWarnings(incidencias: Incidencia[]): string[] {
+  const warnings: string[] = [];
+  const vistos = new Map<string, string>();
+
+  incidencias.forEach((incidencia) => {
+    const clave = [
+      normalizar(incidencia.textoCorregido),
+      normalizar(incidencia.descripcion),
+      normalizar(incidencia.tema),
+      normalizar(incidencia.categoria),
+    ].join("|");
+
+    if (vistos.has(clave)) {
+      warnings.push(
+        `Posible duplicado interno: ${vistos.get(clave)} y ${incidencia.id} tienen texto, descripción, tema y categoría iguales.`
+      );
+    } else {
+      vistos.set(clave, incidencia.id);
+    }
+  });
+
+  return warnings;
 }
