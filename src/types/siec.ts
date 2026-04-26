@@ -1,3 +1,5 @@
+import { SiecPayloadItem } from "@/store/siecPayload";
+
 export type SiecBatch = {
   id: string;
   incidenciasIds: string[];
@@ -5,4 +7,5 @@ export type SiecBatch = {
   creadoPor: string;
   fechaCreacion: string;
   errores?: string[];
+  payloadPreview?: SiecPayloadItem[];
 };

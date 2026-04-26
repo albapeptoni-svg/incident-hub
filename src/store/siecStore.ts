@@ -1,6 +1,7 @@
 import { Incidencia } from "@/types";
 import { SiecBatch } from "@/types/siec";
 import { validateIncidencia } from "@/store/siecValidation";
+import { buildSiecPayload } from "@/store/siecPayload";
 
 const STORAGE_KEY = "siec_batches";
 
@@ -38,22 +39,27 @@ export function simulateBatches(allIncidencias: Incidencia[]) {
   const updated = batches.map((batch) => {
     const errores: string[] = [];
 
-    batch.incidenciasIds.forEach((id) => {
-      const incidencia = allIncidencias.find((item) => item.id === id);
+    const incidenciasDelLote = batch.incidenciasIds
+      .map((id) => {
+        const incidencia = allIncidencias.find((item) => item.id === id);
 
-      if (!incidencia) {
-        errores.push(`Incidencia ${id}: no encontrada`);
-        return;
-      }
+        if (!incidencia) {
+          errores.push(`Incidencia ${id}: no encontrada`);
+          return null;
+        }
 
-      const incidenciaErrores = validateIncidencia(incidencia);
-      errores.push(...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`));
-    });
+        const incidenciaErrores = validateIncidencia(incidencia);
+        errores.push(...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`));
+
+        return incidencia;
+      })
+      .filter((item): item is Incidencia => item !== null);
 
     return {
       ...batch,
       estado: errores.length > 0 ? "bloqueado" as const : "simulado_ok" as const,
       errores,
+      payloadPreview: errores.length === 0 ? buildSiecPayload(incidenciasDelLote) : undefined,
     };
   });
 
