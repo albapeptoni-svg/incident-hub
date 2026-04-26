@@ -8,6 +8,12 @@ import {
 } from "@/store/siecHistory";
 
 const STORAGE_KEY = "siec_batches";
+const MOCK_SEND_DELAY_MS = 1500;
+const MOCK_ERROR_RATE = 0.2;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shouldSimulateSendError = () => Math.random() < MOCK_ERROR_RATE;
 
 export function getBatches(): SiecBatch[] {
   try {
@@ -151,4 +157,67 @@ export function validateBatchBeforeSend(batchId: string) {
   });
 
   saveBatches(updated);
+}
+
+export async function sendBatchSimulated(batchId: string) {
+  const batch = getBatches().find((item) => item.id === batchId);
+
+  if (!batch) {
+    return;
+  }
+
+  if (batch.estado !== "listo_para_envio") {
+    updateBatch(batchId, {
+      estado: "error_envio_simulado",
+      errores: [
+        ...(batch.errores ?? []),
+        "No se puede simular el envío: el lote debe estar en estado listo_para_envio.",
+      ],
+      respuestaSimulada: "ERROR_SIMULADO: lote no preparado para envío.",
+    });
+    return;
+  }
+
+  if (!batch.payloadPreview || batch.payloadPreview.length === 0) {
+    updateBatch(batchId, {
+      estado: "error_envio_simulado",
+      errores: [
+        ...(batch.errores ?? []),
+        "No se puede simular el envío: falta payloadPreview.",
+      ],
+      respuestaSimulada: "ERROR_SIMULADO: payload vacío.",
+    });
+    return;
+  }
+
+  updateBatch(batchId, {
+    estado: "enviando_simulado",
+    respuestaSimulada: "ENVIANDO_SIMULADO: enviando lote al mock de SIEC...",
+  });
+
+  await wait(MOCK_SEND_DELAY_MS);
+
+  const latestBatch = getBatches().find((item) => item.id === batchId);
+
+  if (!latestBatch || latestBatch.estado !== "enviando_simulado") {
+    return;
+  }
+
+  if (shouldSimulateSendError()) {
+    updateBatch(batchId, {
+      estado: "error_envio_simulado",
+      errores: [
+        ...(latestBatch.errores ?? []),
+        "Error simulado de comunicación con SIEC mock.",
+      ],
+      respuestaSimulada: "ERROR_SIMULADO: fallo temporal de comunicación con SIEC mock.",
+    });
+    return;
+  }
+
+  updateBatch(batchId, {
+    estado: "enviado_simulado",
+    fechaEnvioSimulado: new Date().toISOString(),
+    respuestaSimulada: `OK_SIMULADO: ${latestBatch.payloadPreview?.length ?? 0} incidencia(s) aceptadas por SIEC mock.`,
+  });
 }
