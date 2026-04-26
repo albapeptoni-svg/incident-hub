@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck, Send } from "lucide-react";
+import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck, Send, History } from "lucide-react";
 import {
   approveBatchForSend,
   getBatches,
@@ -166,6 +166,27 @@ export default function Cola() {
                   <pre className="max-h-64 overflow-auto rounded bg-background p-3 text-[11px] leading-relaxed">
                     {JSON.stringify(l.payloadPreview, null, 2)}
                   </pre>
+                </div>
+              )}
+
+              {l.logs && l.logs.length > 0 && (
+                <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <History className="h-3.5 w-3.5" />
+                    Historial del lote
+                  </div>
+
+                  <div className="max-h-48 space-y-2 overflow-auto text-xs">
+                    {l.logs.slice().reverse().map((log) => (
+                      <div key={log.id} className="rounded-md border border-border bg-background p-2">
+                        <div className="flex justify-between gap-3 text-[10px] text-muted-foreground">
+                          <span>{new Date(log.fecha).toLocaleString()}</span>
+                          <span className="uppercase">{log.tipo}</span>
+                        </div>
+                        <div className="mt-1">{log.mensaje}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
