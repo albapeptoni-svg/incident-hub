@@ -3,13 +3,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Code2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
-import { getBatches, simulateBatches } from "@/store/siecStore";
+import { getBatches, simulateBatches, approveBatchForSend } from "@/store/siecStore";
 import { SiecBatch } from "@/types/siec";
 import { useIncidencias } from "@/hooks/use-data";
 
 function getQueueStatusLabel(estado: string) {
   if (estado === "simulado_ok") return "Simulado OK";
   if (estado === "bloqueado") return "Bloqueado por validación";
+  if (estado === "aprobado_para_envio") return "Aprobado para envío";
   return "Pendiente de simulación";
 }
 
@@ -103,6 +104,12 @@ export default function Cola() {
                 Usuario: {l.creadoPor}
               </div>
 
+              {l.aprobadoPor && (
+                <div className="mt-2 text-xs text-success">
+                  Aprobado por: {l.aprobadoPor}
+                </div>
+              )}
+
               {l.errores && l.errores.length > 0 && (
                 <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                   <p className="mb-2 font-semibold">Errores de validación:</p>
@@ -132,6 +139,19 @@ export default function Cola() {
                     {JSON.stringify(l.payloadPreview, null, 2)}
                   </pre>
                 </div>
+              )}
+
+              {/* 🔴 BOTÓN CLAVE */}
+              {l.estado === "simulado_ok" && (
+                <Button
+                  className="mt-4 w-full bg-success text-white"
+                  onClick={() => {
+                    approveBatchForSend(l.id);
+                    refreshBatches();
+                  }}
+                >
+                  Aprobar para envío
+                </Button>
               )}
             </div>
           ))}
