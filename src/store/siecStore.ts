@@ -1,4 +1,6 @@
+import { Incidencia } from "@/types";
 import { SiecBatch } from "@/types/siec";
+import { validateIncidencia } from "@/store/siecValidation";
 
 const STORAGE_KEY = "siec_batches";
 
@@ -26,6 +28,34 @@ export function updateBatch(batchId: string, patch: Partial<SiecBatch>) {
   const updated = batches.map((batch) =>
     batch.id === batchId ? { ...batch, ...patch } : batch
   );
+
+  saveBatches(updated);
+}
+
+export function simulateBatches(allIncidencias: Incidencia[]) {
+  const batches = getBatches();
+
+  const updated = batches.map((batch) => {
+    const errores: string[] = [];
+
+    batch.incidenciasIds.forEach((id) => {
+      const incidencia = allIncidencias.find((item) => item.id === id);
+
+      if (!incidencia) {
+        errores.push(`Incidencia ${id}: no encontrada`);
+        return;
+      }
+
+      const incidenciaErrores = validateIncidencia(incidencia);
+      errores.push(...incidenciaErrores.map((error) => `Incidencia ${id}: ${error}`));
+    });
+
+    return {
+      ...batch,
+      estado: errores.length > 0 ? "bloqueado" as const : "simulado_ok" as const,
+      errores,
+    };
+  });
 
   saveBatches(updated);
 }
