@@ -1,40 +1,35 @@
 import { Incidencia } from "@/types";
 
-export function validateSiecIncidencias(incidencias: Incidencia[]) {
+export function validateIncidencia(i: Incidencia): string[] {
   const errores: string[] = [];
 
-  incidencias.forEach((incidencia) => {
-    if (!incidencia.textoCorregido?.trim()) {
-      errores.push(`Incidencia ${incidencia.id}: falta texto corregido.`);
-    }
+  if (!i.textoCorregido || i.textoCorregido.trim() === "") {
+    errores.push("Texto corregido vacío");
+  }
 
-    if (!incidencia.descripcion?.trim()) {
-      errores.push(`Incidencia ${incidencia.id}: falta descripción.`);
-    }
+  if (!i.descripcion || i.descripcion.trim() === "") {
+    errores.push("Descripción obligatoria");
+  }
 
-    if (!incidencia.tema?.trim()) {
-      errores.push(`Incidencia ${incidencia.id}: falta tema.`);
-    }
+  if (!i.tema) {
+    errores.push("Tema obligatorio");
+  }
 
-    if (!incidencia.categoria?.trim()) {
-      errores.push(`Incidencia ${incidencia.id}: falta categoría.`);
-    }
+  if (!i.categoria) {
+    errores.push("Categoría obligatoria");
+  }
 
-    if (!incidencia.grupo?.trim()) {
-      errores.push(`Incidencia ${incidencia.id}: falta grupo.`);
-    }
+  if (!i.grupo) {
+    errores.push("Grupo obligatorio");
+  }
 
-    if (incidencia.textoCorregido && incidencia.textoCorregido.length > 250) {
-      errores.push(`Incidencia ${incidencia.id}: texto corregido demasiado largo.`);
-    }
+  if (!i.crearEnSiec) {
+    errores.push("No marcada para SIEC");
+  }
 
-    if (incidencia.estado !== "aprobada") {
-      errores.push(`Incidencia ${incidencia.id}: no está aprobada.`);
-    }
-  });
+  if (i.estado !== "aprobada") {
+    errores.push("No está aprobada");
+  }
 
-  return {
-    ok: errores.length === 0,
-    errores,
-  };
+  return errores;
 }
