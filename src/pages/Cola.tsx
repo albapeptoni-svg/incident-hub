@@ -3,7 +3,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
-import { getBatches } from "@/store/siecStore";
+import { getBatches, updateBatch } from "@/store/siecStore";
+import { validateSiecIncidencias } from "@/store/siecValidation";
+import { useIncidencias } from "@/hooks/use-data";
 import { SiecBatch } from "@/types/siec";
 
 function getQueueStatusLabel(estado: string) {
@@ -14,10 +16,25 @@ function getQueueStatusLabel(estado: string) {
 
 export default function Cola() {
   const [lotes, setLotes] = useState<SiecBatch[]>(getBatches());
-  const isLoading = false;
+  const { data: incidencias = [], isLoading } = useIncidencias();
 
   const refreshBatches = () => {
     setLotes(getBatches());
+  };
+
+  const handleSimulateBatch = (batch: SiecBatch) => {
+    const incidenciasDelLote = incidencias.filter((incidencia) =>
+      batch.incidenciasIds.includes(incidencia.id)
+    );
+
+    const resultado = validateSiecIncidencias(incidenciasDelLote);
+
+    updateBatch(batch.id, {
+      estado: resultado.ok ? "simulado_ok" : "bloqueado",
+      errores: resultado.errores,
+    });
+
+    refreshBatches();
   };
 
   useEffect(() => {
@@ -45,14 +62,9 @@ export default function Cola() {
         title="Cola SIEC interna"
         subtitle="Lotes preparados para revisión y simulación. No hay envío real a SIEC desde esta pantalla."
         actions={
-          <>
-            <Button variant="outline" size="sm" onClick={refreshBatches}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
-            </Button>
-            <Button size="sm" className="bg-gradient-primary text-primary-foreground">
-              <ShieldCheck className="mr-2 h-4 w-4" /> Simular validación
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={refreshBatches}>
+            <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
+          </Button>
         }
       />
 
@@ -100,8 +112,19 @@ export default function Cola() {
 
               <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                 <span>Usuario: {l.creadoPor}</span>
-                <span>Pendiente de simulación</span>
+                <span>{getQueueStatusLabel(l.estado)}</span>
               </div>
+
+              {l.errores && l.errores.length > 0 && (
+                <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  <p className="mb-2 font-semibold">Errores de validación:</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    {l.errores.map((error) => (
+                      <li key={error}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
                 <div
@@ -115,6 +138,15 @@ export default function Cola() {
                   }
                 />
               </div>
+
+              <Button
+                className="mt-4 w-full"
+                variant={l.estado === "simulado_ok" ? "outline" : "default"}
+                onClick={() => handleSimulateBatch(l)}
+              >
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Simular validación
+              </Button>
             </div>
           ))}
         </div>
