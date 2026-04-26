@@ -24,10 +24,12 @@ import {
   Settings,
   ShieldCheck,
   LogOut,
+  ScanText,
 } from "lucide-react";
 
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "OCR Partes", url: "/ocr", icon: ScanText },
   { title: "Partes", url: "/partes", icon: FileText },
   { title: "Revisión", url: "/revision", icon: ClipboardCheck },
   { title: "Cola SIEC", url: "/cola", icon: Workflow },
