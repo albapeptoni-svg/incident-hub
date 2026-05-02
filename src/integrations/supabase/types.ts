@@ -12,33 +12,30 @@ export interface Database {
       profiles: {
         Row: {
           id: string
-          nombre: string
+          nombre: string | null
           email: string
-          rol: 'admin' | 'tecnico' | 'gestor'
-          centro_id: string | null
+          rol: 'admin' | 'tecnico' | 'visor'
           activo: boolean
-          ultimo_acceso: string | null
-          avatar_url: string | null
+          creado_en: string
+          actualizado_en: string
         }
         Insert: {
           id: string
-          nombre: string
+          nombre?: string | null
           email: string
-          rol?: 'admin' | 'tecnico' | 'gestor'
-          centro_id?: string | null
+          rol?: 'admin' | 'tecnico' | 'visor'
           activo?: boolean
-          ultimo_acceso?: string | null
-          avatar_url?: string | null
+          creado_en?: string
+          actualizado_en?: string
         }
         Update: {
           id?: string
-          nombre?: string
+          nombre?: string | null
           email?: string
-          rol?: 'admin' | 'tecnico' | 'gestor'
-          centro_id?: string | null
+          rol?: 'admin' | 'tecnico' | 'visor'
           activo?: boolean
-          ultimo_acceso?: string | null
-          avatar_url?: string | null
+          creado_en?: string
+          actualizado_en?: string
         }
       }
       centros: {

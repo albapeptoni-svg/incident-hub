@@ -1,34 +1,9 @@
-import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-import { useAuth } from "@/hooks/useAuth";
-import { Loader2 } from "lucide-react";
 
 export function MainLayout() {
-  const { session, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading && !session) {
-      navigate("/login");
-    }
-  }, [session, loading, navigate]);
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground animate-pulse">Verificando sesión...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) return null;
-
   return (
     <SidebarProvider defaultOpen>
       <div className="flex min-h-screen w-full bg-background">

@@ -20,7 +20,7 @@ export function usePartes() {
   return useQuery({
     queryKey: ["partes"],
     queryFn: async () => {
-      if (isMockMode) return mockPartes;
+      if (isMockMode) return [];
       assertSupabaseConfigured();
       try {
         return await dataService.getPartes();

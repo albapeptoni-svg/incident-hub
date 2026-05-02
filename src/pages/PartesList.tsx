@@ -1,324 +1,244 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  operationalDataService,
+  type IncidenciaParte,
+  type ParteOperativo,
+} from "@/services/operationalData.service";
 
-type IncidenciaParte = {
-  id: string;
-  texto: string;
-  incluirEnSIEC: boolean;
-};
-
-type ParteGuardado = {
-  id: string;
-  titulo: string;
-  centro: string;
-  fecha: string;
-  incidencias: IncidenciaParte[];
-  origen?: string;
-  estado?: string;
-  creadoEn: string;
-  enviadoEn?: string;
-};
-
-type IncidenciaColaSIEC = {
-  id: string;
-  parteId: string;
-  parteTitulo: string;
-  centro: string;
-  fecha: string;
-  descripcion: string;
-  estado: "pendiente_siec";
-  origen: "parte_trabajo_ocr";
-  creadoEn: string;
-};
-
-const PARTES_GUARDADOS_KEY = "partes_guardados";
-const PARTES_PAPELERA_KEY = "partes_guardados_papelera";
-const COLA_SIEC_KEY = "cola_siec_pendiente";
-
-function crearId() {
-  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-}
+const TODOS_LOS_CENTROS = "__todos__";
 
 function limpiarNumeracionInicial(texto: string): string {
   return texto
-    .replace(/^\s*(\d+)[\).\-\s]+/u, "")
+    .replace(/^\s*(\d+)[).\-\s]+/u, "")
     .replace(/^\s*[-•]\s+/u, "")
     .trim();
 }
 
-function normalizarIncidencias(raw: unknown): IncidenciaParte[] {
-  if (!Array.isArray(raw)) return [];
+function normalizarFechaFiltro(fecha: string): string {
+  const value = fecha.trim();
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
 
-  return raw
-    .map((item): IncidenciaParte | null => {
-      if (typeof item === "string") {
-        const texto = limpiarNumeracionInicial(item);
-        if (!texto) return null;
+  const match = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
+  if (!match) return value;
 
-        return {
-          id: crearId(),
-          texto,
-          incluirEnSIEC: true,
-        };
-      }
-
-      if (item && typeof item === "object") {
-        const obj = item as Record<string, unknown>;
-        const texto = limpiarNumeracionInicial(String(obj.texto ?? ""));
-        if (!texto) return null;
-
-        return {
-          id: String(obj.id ?? crearId()),
-          texto,
-          incluirEnSIEC:
-            typeof obj.incluirEnSIEC === "boolean"
-              ? obj.incluirEnSIEC
-              : true,
-        };
-      }
-
-      return null;
-    })
-    .filter((item): item is IncidenciaParte => item !== null);
-}
-
-function cargarPartesGuardados(): ParteGuardado[] {
-  try {
-    const raw = localStorage.getItem(PARTES_GUARDADOS_KEY);
-    if (!raw) return [];
-
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-
-    return data
-      .map((parte): ParteGuardado | null => {
-        if (!parte || typeof parte !== "object") return null;
-
-        const obj = parte as Record<string, unknown>;
-
-        const centro = String(obj.centro ?? "").trim();
-        const fecha = String(obj.fecha ?? "").trim();
-        const incidencias = normalizarIncidencias(obj.incidencias);
-
-        if (!centro || !fecha || incidencias.length === 0) return null;
-
-        return {
-          id: String(obj.id ?? crearId()),
-          titulo:
-            typeof obj.titulo === "string" && obj.titulo.trim()
-              ? obj.titulo.trim()
-              : `Parte ${centro} - ${fecha}`,
-          centro,
-          fecha,
-          incidencias,
-          origen:
-            typeof obj.origen === "string" ? obj.origen : "OCR/Gemini",
-          estado:
-            typeof obj.estado === "string" ? obj.estado : "revisado",
-          creadoEn:
-            typeof obj.creadoEn === "string"
-              ? obj.creadoEn
-              : new Date().toISOString(),
-          enviadoEn:
-            typeof obj.enviadoEn === "string" ? obj.enviadoEn : undefined,
-        };
-      })
-      .filter((parte): parte is ParteGuardado => parte !== null);
-  } catch (error) {
-    console.error("No se pudieron cargar los partes guardados:", error);
-    return [];
-  }
-}
-
-function guardarPartesGuardados(partes: ParteGuardado[]) {
-  localStorage.setItem(PARTES_GUARDADOS_KEY, JSON.stringify(partes));
-}
-
-function cargarPapelera(): ParteGuardado[] {
-  try {
-    const raw = localStorage.getItem(PARTES_PAPELERA_KEY);
-    if (!raw) return [];
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-function guardarPapelera(partes: ParteGuardado[]) {
-  localStorage.setItem(PARTES_PAPELERA_KEY, JSON.stringify(partes));
-}
-
-function cargarColaSIEC(): IncidenciaColaSIEC[] {
-  try {
-    const raw = localStorage.getItem(COLA_SIEC_KEY);
-    if (!raw) return [];
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-function guardarColaSIEC(cola: IncidenciaColaSIEC[]) {
-  localStorage.setItem(COLA_SIEC_KEY, JSON.stringify(cola));
+  const [, dia, mes, anio] = match;
+  const year = anio.length === 2 ? `20${anio}` : anio;
+  return `${year}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
 }
 
 export default function PartesList() {
-  const [partes, setPartes] = useState<ParteGuardado[]>([]);
-  const [papelera, setPapelera] = useState<ParteGuardado[]>([]);
+  const [partes, setPartes] = useState<ParteOperativo[]>([]);
+  const [papelera, setPapelera] = useState<ParteOperativo[]>([]);
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
+  const [filtroFecha, setFiltroFecha] = useState("");
+  const [filtroNombre, setFiltroNombre] = useState("");
+  const [filtroCentro, setFiltroCentro] = useState(TODOS_LOS_CENTROS);
+  const [loading, setLoading] = useState(true);
+  const [mensaje, setMensaje] = useState("");
 
-  useEffect(() => {
-    const cargados = cargarPartesGuardados();
-    setPartes(cargados);
-    setPapelera(cargarPapelera());
-
-    if (cargados.length > 0) {
-      guardarPartesGuardados(cargados);
-    }
-  }, []);
-
-  const actualizarParte = (
-    parteId: string,
-    cambios: Partial<ParteGuardado>
-  ) => {
-    setPartes((prev) => {
-      const actualizados = prev.map((parte) =>
-        parte.id === parteId ? { ...parte, ...cambios } : parte
-      );
-
-      guardarPartesGuardados(actualizados);
-      return actualizados;
-    });
+  const mostrarMensaje = (texto: string) => {
+    setMensaje(texto);
+    window.setTimeout(() => setMensaje(""), 3500);
   };
 
-  const actualizarIncidencia = (
+  const cargar = async () => {
+    setLoading(true);
+    try {
+      const [partesActivos, partesPapelera] = await Promise.all([
+        operationalDataService.listarPartes(false),
+        operationalDataService.listarPapelera(),
+      ]);
+      setPartes(partesActivos);
+      setPapelera(partesPapelera);
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudieron cargar los partes desde Supabase.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  const actualizarParte = async (
+    parteId: string,
+    cambios: Partial<Pick<ParteOperativo, "titulo" | "centro" | "fecha">>
+  ) => {
+    setPartes((prev) =>
+      prev.map((parte) => (parte.id === parteId ? { ...parte, ...cambios } : parte))
+    );
+
+    try {
+      await operationalDataService.actualizarParte(parteId, cambios);
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo actualizar el parte.");
+      cargar();
+    }
+  };
+
+  const actualizarIncidencia = async (
     parteId: string,
     incidenciaId: string,
     cambios: Partial<IncidenciaParte>
   ) => {
-    setPartes((prev) => {
-      const actualizados = prev.map((parte) => {
-        if (parte.id !== parteId) return parte;
+    const cambiosNormalizados = {
+      ...cambios,
+      texto:
+        typeof cambios.texto === "string"
+          ? limpiarNumeracionInicial(cambios.texto)
+          : cambios.texto,
+    };
 
-        return {
-          ...parte,
-          incidencias: parte.incidencias.map((inc) =>
-            inc.id === incidenciaId
-              ? {
-                  ...inc,
-                  ...cambios,
-                  texto:
-                    typeof cambios.texto === "string"
-                      ? limpiarNumeracionInicial(cambios.texto)
-                      : inc.texto,
-                }
-              : inc
-          ),
-        };
-      });
+    setPartes((prev) =>
+      prev.map((parte) =>
+        parte.id === parteId
+          ? {
+              ...parte,
+              incidencias: parte.incidencias.map((inc) =>
+                inc.id === incidenciaId ? { ...inc, ...cambiosNormalizados } : inc
+              ),
+            }
+          : parte
+      )
+    );
 
-      guardarPartesGuardados(actualizados);
-      return actualizados;
-    });
+    try {
+      await operationalDataService.actualizarIncidencia(incidenciaId, cambiosNormalizados);
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo actualizar la incidencia.");
+      cargar();
+    }
   };
 
-  const eliminarParte = (id: string) => {
-    const confirmar = window.confirm(
-      "¿Mover este parte a la papelera?"
-    );
+  const eliminarParte = async (id: string) => {
+    const confirmar = window.confirm("¿Mover este parte a la papelera?");
     if (!confirmar) return;
 
-    const parteEliminado = partes.find((parte) => parte.id === id);
-    if (!parteEliminado) return;
-
-    const actualizados = partes.filter((parte) => parte.id !== id);
-    const nuevaPapelera = [parteEliminado, ...papelera];
-
-    setPartes(actualizados);
-    setPapelera(nuevaPapelera);
-
-    guardarPartesGuardados(actualizados);
-    guardarPapelera(nuevaPapelera);
+    try {
+      await operationalDataService.moverParteAPapelera(id);
+      await cargar();
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo mover el parte a la papelera.");
+    }
   };
 
-  const vaciarListado = () => {
+  const vaciarListado = async () => {
     const confirmar = window.confirm(
       "¿Mover todos los partes a la papelera? Podrás recuperarlos después."
     );
     if (!confirmar) return;
 
-    const nuevaPapelera = [...partes, ...papelera];
-
-    setPartes([]);
-    setPapelera(nuevaPapelera);
-
-    localStorage.removeItem(PARTES_GUARDADOS_KEY);
-    guardarPapelera(nuevaPapelera);
+    try {
+      await operationalDataService.vaciarListado();
+      await cargar();
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo vaciar el listado.");
+    }
   };
 
-  const recuperarPapelera = () => {
+  const recuperarPapelera = async () => {
     if (papelera.length === 0) return;
-
-    const confirmar = window.confirm(
-      "¿Recuperar todos los partes borrados?"
-    );
+    const confirmar = window.confirm("¿Recuperar todos los partes borrados?");
     if (!confirmar) return;
 
-    const recuperados = [...papelera, ...partes];
-
-    setPartes(recuperados);
-    setPapelera([]);
-
-    guardarPartesGuardados(recuperados);
-    localStorage.removeItem(PARTES_PAPELERA_KEY);
+    try {
+      await operationalDataService.recuperarPapelera();
+      await cargar();
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo recuperar la papelera.");
+    }
   };
 
-  const enviarAlSiguientePaso = (parte: ParteGuardado) => {
-    const incidenciasSeleccionadas = parte.incidencias
-      .filter((inc) => inc.incluirEnSIEC && inc.texto.trim() !== "")
-      .map((inc) => limpiarNumeracionInicial(inc.texto));
+  const enviarAlSiguientePaso = async (parte: ParteOperativo) => {
+    const total = parte.incidencias.filter(
+      (inc) => inc.incluirEnSIEC && inc.texto.trim() !== ""
+    ).length;
 
-    if (incidenciasSeleccionadas.length === 0) {
+    if (total === 0) {
       alert("No hay incidencias activadas para enviar al siguiente paso.");
       return;
     }
 
     const confirmar = window.confirm(
-      `Se enviarán ${incidenciasSeleccionadas.length} incidencias al siguiente paso SIEC. ¿Continuar?`
+      `Se enviarán ${total} incidencias al siguiente paso SIEC. ¿Continuar?`
     );
-
     if (!confirmar) return;
 
-    const nuevasIncidencias: IncidenciaColaSIEC[] =
-      incidenciasSeleccionadas.map((descripcion) => ({
-        id: crearId(),
-        parteId: parte.id,
-        parteTitulo: parte.titulo,
-        centro: parte.centro,
-        fecha: parte.fecha,
-        descripcion,
-        estado: "pendiente_siec",
-        origen: "parte_trabajo_ocr",
-        creadoEn: new Date().toISOString(),
-      }));
-
-    const colaActual = cargarColaSIEC();
-    guardarColaSIEC([...colaActual, ...nuevasIncidencias]);
-
-    actualizarParte(parte.id, {
-      estado: "enviado_a_siguiente_paso",
-      enviadoEn: new Date().toISOString(),
-    });
-
-    alert("Parte enviado al siguiente paso correctamente.");
+    try {
+      await operationalDataService.enviarParteACola(parte);
+      await cargar();
+      alert("Parte enviado al siguiente paso correctamente.");
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo enviar el parte a Cola SIEC.");
+    }
   };
 
   const toggleExpandido = (id: string) => {
     setExpandidos((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const renderParte = (parte: ParteGuardado, isHistorico: boolean) => {
+  const centrosDisponibles = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          partes.map((parte) => parte.centro.trim()).filter((centro) => centro.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [partes]
+  );
+
+  const partesFiltrados = useMemo(() => {
+    const fechaNormalizada = normalizarFechaFiltro(filtroFecha);
+    const nombreNormalizado = filtroNombre.trim().toLocaleLowerCase("es");
+
+    return partes.filter((parte) => {
+      const coincideFecha =
+        !fechaNormalizada ||
+        normalizarFechaFiltro(parte.fecha) === fechaNormalizada ||
+        parte.fecha.trim() === filtroFecha.trim();
+
+      const textoBusqueda = `${parte.titulo} ${parte.centro}`.toLocaleLowerCase("es");
+      const coincideNombre =
+        !nombreNormalizado || textoBusqueda.includes(nombreNormalizado);
+
+      const coincideCentro =
+        filtroCentro === TODOS_LOS_CENTROS || parte.centro === filtroCentro;
+
+      return coincideFecha && coincideNombre && coincideCentro;
+    });
+  }, [filtroCentro, filtroFecha, filtroNombre, partes]);
+
+  const hayFiltrosActivos =
+    filtroFecha !== "" ||
+    filtroNombre.trim() !== "" ||
+    filtroCentro !== TODOS_LOS_CENTROS;
+
+  const limpiarFiltros = () => {
+    setFiltroFecha("");
+    setFiltroNombre("");
+    setFiltroCentro(TODOS_LOS_CENTROS);
+  };
+
+  const renderParte = (parte: ParteOperativo, isHistorico: boolean) => {
     const activas = parte.incidencias.filter((inc) => inc.incluirEnSIEC).length;
     const expandido = !isHistorico || expandidos[parte.id];
 
@@ -357,6 +277,7 @@ export default function PartesList() {
             </button>
           </div>
         )}
+
         <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1">
             <span className="text-sm font-semibold text-slate-700">Título</span>
@@ -390,17 +311,11 @@ export default function PartesList() {
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
             Estado: {parte.estado}
           </span>
-
           <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">
             Origen: {parte.origen}
           </span>
-
           <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
             Incidencias activas: {activas}/{parte.incidencias.length}
-          </span>
-
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-            Creado: {new Date(parte.creadoEn).toLocaleString("es-ES")}
           </span>
         </div>
 
@@ -429,7 +344,6 @@ export default function PartesList() {
                   <div className="mb-1 text-sm font-semibold text-slate-600">
                     Línea {index + 1}
                   </div>
-
                   <textarea
                     value={incidencia.texto}
                     onChange={(e) =>
@@ -464,11 +378,11 @@ export default function PartesList() {
     );
   };
 
-  const activos = partes
+  const activos = partesFiltrados
     .filter((p) => p.estado === "revisado" || p.estado === "pendiente_siec" || p.estado === "preparado_siec")
     .sort((a, b) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
 
-  const historicos = partes
+  const historicos = partesFiltrados
     .filter((p) => p.estado === "enviado_a_siguiente_paso" || p.estado === "enviado_siec" || p.estado === "gestionado")
     .sort((a, b) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
 
@@ -506,14 +420,73 @@ export default function PartesList() {
           </div>
         </div>
 
-        {partes.length === 0 ? (
+        {mensaje && (
+          <div className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+            {mensaje}
+          </div>
+        )}
+
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Buscar partes</h2>
+              <p className="text-sm text-slate-500">
+                Filtra por fecha, nombre del parte o centro.
+              </p>
+            </div>
+
+            <Button type="button" variant="outline" onClick={limpiarFiltros} disabled={!hayFiltrosActivos}>
+              Limpiar filtros
+            </Button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="filtro-fecha">Fecha</Label>
+              <Input id="filtro-fecha" type="date" value={filtroFecha} onChange={(event) => setFiltroFecha(event.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="filtro-nombre">Nombre</Label>
+              <Input id="filtro-nombre" value={filtroNombre} onChange={(event) => setFiltroNombre(event.target.value)} placeholder="Buscar por nombre o título" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Centro / supermercado</Label>
+              <Select value={filtroCentro} onValueChange={setFiltroCentro}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los centros" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS_LOS_CENTROS}>Todos los centros</SelectItem>
+                  {centrosDisponibles.map((centro) => (
+                    <SelectItem key={centro} value={centro}>
+                      {centro}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-slate-500">
+            Mostrando {partesFiltrados.length} de {partes.length} partes.
+          </p>
+        </section>
+
+        {loading ? (
           <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
-            <p className="text-lg font-semibold text-slate-800">
-              No hay partes guardados todavía.
-            </p>
-            <p className="mt-2 text-slate-500">
-              Digitaliza un parte, revísalo y pulsa “Crear parte revisado”.
-            </p>
+            <p className="text-lg font-semibold text-slate-800">Cargando partes...</p>
+          </div>
+        ) : partes.length === 0 ? (
+          <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
+            <p className="text-lg font-semibold text-slate-800">No hay partes guardados todavía.</p>
+            <p className="mt-2 text-slate-500">Digitaliza un parte, revísalo y pulsa “Crear parte revisado”.</p>
+          </div>
+        ) : partesFiltrados.length === 0 ? (
+          <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
+            <p className="text-lg font-semibold text-slate-800">No hay partes que coincidan con la búsqueda</p>
+            <p className="mt-2 text-slate-500">Prueba a cambiar la fecha, el nombre o el centro seleccionado.</p>
           </div>
         ) : (
           <div className="space-y-10">
@@ -522,9 +495,7 @@ export default function PartesList() {
               {activos.length === 0 ? (
                 <p className="text-slate-500">No hay partes activos.</p>
               ) : (
-                <div className="space-y-5">
-                  {activos.map((parte) => renderParte(parte, false))}
-                </div>
+                <div className="space-y-5">{activos.map((parte) => renderParte(parte, false))}</div>
               )}
             </div>
 
@@ -533,9 +504,7 @@ export default function PartesList() {
               {historicos.length === 0 ? (
                 <p className="text-slate-500">No hay partes en el histórico.</p>
               ) : (
-                <div className="space-y-3">
-                  {historicos.map((parte) => renderParte(parte, true))}
-                </div>
+                <div className="space-y-3">{historicos.map((parte) => renderParte(parte, true))}</div>
               )}
             </div>
           </div>

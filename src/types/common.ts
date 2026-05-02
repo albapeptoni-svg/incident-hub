@@ -12,7 +12,7 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  rol: "admin" | "tecnico" | "gestor";
+  rol: "admin" | "tecnico" | "visor";
   centroId?: string;
   activo: boolean;
   ultimoAcceso?: string;

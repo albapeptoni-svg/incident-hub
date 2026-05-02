@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { analizarParteConGemini } from "@/services/geminiParteService";
+import { useAuth } from "@/hooks/useAuth";
+import { operationalDataService } from "@/services/operationalData.service";
 
 type IncidenciaRevision = {
   id: number;
@@ -13,8 +15,14 @@ type ResultadoGemini = {
   incidencias?: any[];
 };
 
+type ErrorSupabaseLike = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 const STORAGE_KEY = "partes-ia-revision-actual";
-const PARTES_GUARDADOS_KEY = "partes_guardados";
 
 const correcciones: Record<string, string> = {
   maquina: "máquina",
@@ -65,49 +73,20 @@ function corregirAcentosBasicos(texto: string) {
     .join("");
 }
 
-function cargarRevisionGuardada() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return null;
-
-    const data = JSON.parse(saved);
-
-    return {
-      centro: typeof data.centro === "string" ? data.centro : "",
-      fechaVisita: typeof data.fechaVisita === "string" ? data.fechaVisita : "",
-      incidencias: Array.isArray(data.incidencias) ? data.incidencias : [],
-    };
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
+function obtenerMensajeError(error: unknown) {
+  if (error && typeof error === "object") {
+    const err = error as ErrorSupabaseLike;
+    return [err.message, err.code && `Código: ${err.code}`, err.details, err.hint]
+      .filter(Boolean)
+      .join(" | ");
   }
-}
 
-function guardarRevisionLigera(
-  centro: string,
-  fechaVisita: string,
-  incidencias: IncidenciaRevision[]
-) {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        centro,
-        fechaVisita,
-        incidencias: incidencias.map((inc) => ({
-          id: inc.id,
-          texto: inc.texto,
-          incluirEnSIEC: inc.incluirEnSIEC,
-        })),
-      })
-    );
-  } catch (error) {
-    console.warn("No se pudo guardar la revisión OCR:", error);
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  return typeof error === "string" ? error : "Error desconocido.";
 }
 
 export default function OCRPartes() {
+  const { user } = useAuth();
+
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [centro, setCentro] = useState("");
@@ -117,18 +96,36 @@ export default function OCRPartes() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const data = cargarRevisionGuardada();
-    if (!data) return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
 
-    setCentro(data.centro);
-    setFechaVisita(data.fechaVisita);
-    setIncidencias(data.incidencias);
+    try {
+      const data = JSON.parse(saved);
+
+      setCentro(data.centro || "");
+      setFechaVisita(data.fechaVisita || "");
+      setIncidencias(Array.isArray(data.incidencias) ? data.incidencias : []);
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }, []);
 
   useEffect(() => {
-    if (!centro && !fechaVisita && incidencias.length === 0) return;
+    const hayRevision =
+      centro.trim() !== "" ||
+      fechaVisita.trim() !== "" ||
+      incidencias.length > 0;
 
-    guardarRevisionLigera(centro, fechaVisita, incidencias);
+    if (!hayRevision) return;
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        centro,
+        fechaVisita,
+        incidencias,
+      })
+    );
   }, [centro, fechaVisita, incidencias]);
 
   useEffect(() => {
@@ -178,6 +175,7 @@ export default function OCRPartes() {
             textoBruto = item;
           } else if (item && typeof item === "object") {
             textoBruto = item.descripcion || item.titulo || "";
+
             if (item.incluirEnSIEC !== undefined) {
               incluir = Boolean(item.incluirEnSIEC);
             }
@@ -185,11 +183,17 @@ export default function OCRPartes() {
 
           return {
             id: Date.now() + index,
-            texto: typeof textoBruto === "string" ? corregirAcentosBasicos(textoBruto.trim()) : "",
+            texto:
+              typeof textoBruto === "string"
+                ? corregirAcentosBasicos(textoBruto.trim())
+                : "",
             incluirEnSIEC: incluir,
           };
         })
-        .filter((inc) => typeof inc.texto === "string" && inc.texto.trim() !== "");
+        .filter(
+          (inc) =>
+            typeof inc.texto === "string" && inc.texto.trim() !== ""
+        );
 
       setIncidencias(nuevasIncidencias);
 
@@ -215,17 +219,33 @@ export default function OCRPartes() {
     setFechaVisita("");
     setIncidencias([]);
     setError("");
+
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const guardarParte = () => {
-    if (typeof centro !== "string" || typeof fechaVisita !== "string" || !centro.trim() || !fechaVisita.trim()) {
+  const guardarParte = async () => {
+    if (!user?.id) {
+      alert("Necesitas una sesión activa para crear partes.");
+      return;
+    }
+
+    if (
+      typeof centro !== "string" ||
+      typeof fechaVisita !== "string" ||
+      !centro.trim() ||
+      !fechaVisita.trim()
+    ) {
       alert("Centro y fecha son obligatorios.");
       return;
     }
 
     const incidenciasFinales = incidencias
-      .filter((inc) => inc.incluirEnSIEC && typeof inc.texto === "string" && inc.texto.trim() !== "")
+      .filter(
+        (inc) =>
+          inc.incluirEnSIEC &&
+          typeof inc.texto === "string" &&
+          inc.texto.trim() !== ""
+      )
       .map((inc) => inc.texto.trim());
 
     if (incidenciasFinales.length === 0) {
@@ -233,45 +253,44 @@ export default function OCRPartes() {
       return;
     }
 
-    const nuevoParte = {
-      id: Date.now(),
-      centro: typeof centro === "string" ? centro.trim() : "",
-      fecha: typeof fechaVisita === "string" ? fechaVisita.trim() : "",
-      incidencias: incidenciasFinales,
-      creadoEn: new Date().toISOString(),
-    };
-
     try {
-      const partesGuardados = JSON.parse(
-        localStorage.getItem(PARTES_GUARDADOS_KEY) || "[]"
-      );
-
-      const partesActualizados = Array.isArray(partesGuardados)
-        ? [...partesGuardados, nuevoParte]
-        : [nuevoParte];
-
-      localStorage.setItem(
-        PARTES_GUARDADOS_KEY,
-        JSON.stringify(partesActualizados)
-      );
+      await operationalDataService.crearParteDesdeOcr({
+        centro: centro.trim(),
+        fecha: fechaVisita.trim(),
+        tecnicoId: user.id,
+        incidencias: incidencias
+          .filter(
+            (inc) =>
+              typeof inc.texto === "string" && inc.texto.trim() !== ""
+          )
+          .map((inc) => ({
+            texto: inc.texto.trim(),
+            incluirEnSIEC: inc.incluirEnSIEC,
+          })),
+      });
 
       alert("Parte revisado creado correctamente.");
       limpiarRevision();
     } catch (error) {
       console.error("No se pudo guardar el parte revisado:", error);
-      alert("No se pudo guardar el parte. El almacenamiento local está lleno.");
+      const mensaje = obtenerMensajeError(error);
+      alert(`No se pudo guardar el parte en Supabase: ${mensaje}`);
     }
   };
 
   const cambiarTexto = (id: number, nuevoTexto: string) => {
     setIncidencias((prev) =>
-      prev.map((inc) => (inc.id === id ? { ...inc, texto: nuevoTexto } : inc))
+      prev.map((inc) =>
+        inc.id === id ? { ...inc, texto: nuevoTexto } : inc
+      )
     );
   };
 
   const cambiarEstado = (id: number, incluirEnSIEC: boolean) => {
     setIncidencias((prev) =>
-      prev.map((inc) => (inc.id === id ? { ...inc, incluirEnSIEC } : inc))
+      prev.map((inc) =>
+        inc.id === id ? { ...inc, incluirEnSIEC } : inc
+      )
     );
   };
 
@@ -280,7 +299,10 @@ export default function OCRPartes() {
   };
 
   const incidenciasAEnviar = incidencias.filter(
-    (inc) => inc.incluirEnSIEC && typeof inc.texto === "string" && inc.texto.trim() !== ""
+    (inc) =>
+      inc.incluirEnSIEC &&
+      typeof inc.texto === "string" &&
+      inc.texto.trim() !== ""
   );
 
   return (
@@ -337,7 +359,9 @@ export default function OCRPartes() {
         )}
 
         {error && (
-          <div className="rounded-xl bg-red-100 p-3 text-red-700">{error}</div>
+          <div className="rounded-xl bg-red-100 p-3 text-red-700">
+            {error}
+          </div>
         )}
 
         {(centro || fechaVisita) && (
@@ -452,7 +476,9 @@ export default function OCRPartes() {
                 {
                   centro,
                   fecha_visita: fechaVisita,
-                  incidencias: incidenciasAEnviar.map((i) => typeof i.texto === "string" ? i.texto.trim() : ""),
+                  incidencias: incidenciasAEnviar.map((i) =>
+                    typeof i.texto === "string" ? i.texto.trim() : ""
+                  ),
                 },
                 null,
                 2

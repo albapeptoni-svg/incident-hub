@@ -1,368 +1,264 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Download,
-  Eye,
-  History,
-  Loader2,
-  RefreshCw,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  approveBatchForSend,
-  getBatches,
-  sendBatchSimulated,
-  simulateBatches,
-  validateBatchBeforeSend,
-} from "@/store/siecStore";
-import { SiecBatch } from "@/types/siec";
-import { useIncidencias } from "@/hooks/use-data";
+  operationalDataService,
+  type IncidenciaColaSIEC,
+} from "@/services/operationalData.service";
 
-function getEstadoUsuario(estado: string) {
-  if (estado === "pendiente") return "Pendiente";
-  if (estado === "simulado_ok") return "Validado";
-  if (estado === "aprobado_para_envio") return "Aprobado";
-  if (estado === "listo_para_envio") return "Listo para enviar";
-  if (estado === "enviando_simulado") return "Enviando...";
-  if (estado === "enviado_simulado") return "Enviado";
-  if (estado === "error_envio_simulado") return "Error de envío";
-  if (estado === "bloqueado") return "Necesita revisión";
-  return "Pendiente";
+type ParteAgrupado = {
+  id: string;
+  titulo: string;
+  centro: string;
+  fecha: string;
+  incidencias: IncidenciaColaSIEC[];
+};
+
+function getTextoIncidencia(incidencia: IncidenciaColaSIEC) {
+  return incidencia.texto || incidencia.descripcion || "Incidencia sin texto";
 }
 
-function getEstadoIcono(estado: string) {
-  if (["enviado_simulado", "listo_para_envio", "simulado_ok"].includes(estado)) {
-    return CheckCircle2;
-  }
-
-  if (["bloqueado", "error_envio_simulado"].includes(estado)) {
-    return AlertTriangle;
-  }
-
-  return Clock;
-}
-
-function exportBatchToCSV(batch: SiecBatch) {
-  if (!batch.payloadPreview || batch.payloadPreview.length === 0) {
-    alert("No hay datos para exportar.");
-    return;
-  }
-
-  const headers = Object.keys(batch.payloadPreview[0]);
-
-  const rows = batch.payloadPreview.map((item) =>
-    headers
-      .map((header) => {
-        const value = item[header as keyof typeof item] ?? "";
-        return `"${String(value).replace(/"/g, '""')}"`;
-      })
-      .join(";")
+function getClaveParte(incidencia: IncidenciaColaSIEC) {
+  return (
+    incidencia.parteId ||
+    `${incidencia.parteTitulo || "parte"}-${incidencia.centro || "centro"}-${incidencia.fecha || "fecha"}`
   );
+}
 
-  const csvContent = [headers.join(";"), ...rows].join("\n");
-  const blob = new Blob(["\uFEFF" + csvContent], {
-    type: "text/csv;charset=utf-8;",
+function agruparPorParte(cola: IncidenciaColaSIEC[]): ParteAgrupado[] {
+  const grupos = new Map<string, ParteAgrupado>();
+
+  cola.forEach((item) => {
+    if (item.estado !== "pendiente_siec") return;
+    const id = getClaveParte(item);
+
+    if (!grupos.has(id)) {
+      grupos.set(id, {
+        id,
+        titulo: item.parteTitulo || "Parte sin título",
+        centro: item.centro || "Centro sin indicar",
+        fecha: item.fecha || "Fecha sin indicar",
+        incidencias: [],
+      });
+    }
+
+    grupos.get(id)?.incidencias.push(item);
   });
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `lote_${batch.id}.csv`;
-  link.click();
-
-  URL.revokeObjectURL(url);
+  return Array.from(grupos.values());
 }
 
 export default function Cola() {
-  const [lotes, setLotes] = useState<SiecBatch[]>(getBatches());
-  const [detalleAbierto, setDetalleAbierto] = useState<string | null>(null);
-  const { data: incidencias = [] } = useIncidencias();
+  const { user, profile, isVisor } = useAuth();
+  const [cola, setCola] = useState<IncidenciaColaSIEC[]>([]);
+  const [seleccionadas, setSeleccionadas] = useState<Record<string, Set<string>>>({});
+  const [loading, setLoading] = useState(true);
+  const [mensaje, setMensaje] = useState("");
 
-  const refreshBatches = () => {
-    setLotes(getBatches());
+  const mostrarMensaje = (texto: string) => {
+    setMensaje(texto);
+    window.setTimeout(() => setMensaje(""), 3500);
+  };
+
+  const cargar = async () => {
+    setLoading(true);
+    try {
+      setCola(await operationalDataService.listarCola());
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo cargar la Cola SIEC desde Supabase.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    refreshBatches();
-
-    window.addEventListener("siec-batches-updated", refreshBatches);
-    return () => {
-      window.removeEventListener("siec-batches-updated", refreshBatches);
-    };
+    cargar();
   }, []);
 
-  const resumen = useMemo(() => {
-    return {
-      total: lotes.length,
-      listos: lotes.filter((l) => ["listo_para_envio", "enviado_simulado"].includes(l.estado)).length,
-      revisar: lotes.filter((l) => ["bloqueado", "error_envio_simulado"].includes(l.estado)).length,
-    };
-  }, [lotes]);
+  const partesAgrupados = useMemo(() => agruparPorParte(cola), [cola]);
 
-  if (!lotes) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    setSeleccionadas((prev) => {
+      const siguiente: Record<string, Set<string>> = {};
+
+      partesAgrupados.forEach((parte) => {
+        const idsPendientes = new Set(parte.incidencias.map((incidencia) => incidencia.id));
+        const seleccionActual = prev[parte.id];
+        if (!seleccionActual) return;
+
+        const seleccionVigente = new Set(
+          [...seleccionActual].filter((id) => idsPendientes.has(id))
+        );
+
+        if (seleccionVigente.size > 0) {
+          siguiente[parte.id] = seleccionVigente;
+        }
+      });
+
+      return siguiente;
+    });
+  }, [partesAgrupados]);
+
+  const toggleIncidencia = (parteId: string, incidenciaId: string) => {
+    setSeleccionadas((prev) => {
+      const seleccionParte = new Set(prev[parteId] ?? []);
+
+      if (seleccionParte.has(incidenciaId)) {
+        seleccionParte.delete(incidenciaId);
+      } else {
+        seleccionParte.add(incidenciaId);
+      }
+
+      return { ...prev, [parteId]: seleccionParte };
+    });
+  };
+
+  const toggleTodas = (parte: ParteAgrupado) => {
+    setSeleccionadas((prev) => {
+      const ids = parte.incidencias.map((incidencia) => incidencia.id);
+      const seleccionParte = prev[parte.id] ?? new Set<string>();
+      const estanTodasSeleccionadas = ids.every((id) => seleccionParte.has(id));
+
+      return {
+        ...prev,
+        [parte.id]: estanTodasSeleccionadas ? new Set() : new Set(ids),
+      };
+    });
+  };
+
+  const enviarSeleccionadas = async (parte: ParteAgrupado) => {
+    if (isVisor) {
+      mostrarMensaje("Tu rol permite consultar, pero no gestionar incidencias.");
+      return;
+    }
+
+    const idsSeleccionados = Array.from(seleccionadas[parte.id] ?? []);
+    if (idsSeleccionados.length === 0) return;
+
+    try {
+      await operationalDataService.enviarIncidenciasASiec(idsSeleccionados, {
+        id: user?.id,
+        email: user?.email,
+        profile,
+      });
+      setSeleccionadas((prev) => {
+        const siguiente = { ...prev };
+        delete siguiente[parte.id];
+        return siguiente;
+      });
+      await cargar();
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudieron enviar las incidencias seleccionadas.");
+    }
+  };
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Envíos"
-        title="Cola SIEC"
-        subtitle="Revisa los lotes preparados antes de cualquier envío a SIEC."
-        actions={
-          <>
-            <Button variant="outline" size="sm" onClick={refreshBatches}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
-            </Button>
-
-            <Button
-              size="sm"
-              className="bg-gradient-primary text-primary-foreground"
-              onClick={() => {
-                simulateBatches(incidencias);
-                refreshBatches();
-              }}
-            >
-              <ShieldCheck className="mr-2 h-4 w-4" /> Validar lotes
-            </Button>
-          </>
-        }
+        eyebrow="Cola SIEC"
+        title="Cola de incidencias pendientes"
+        subtitle="Incidencias agrupadas por parte, con selección previa para SIEC."
       />
 
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <div className="surface-card p-4">
-          <p className="text-xs text-muted-foreground">Total de lotes</p>
-          <p className="mt-1 font-display text-2xl font-bold">{resumen.total}</p>
+      {mensaje && (
+        <div className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+          {mensaje}
         </div>
+      )}
 
-        <div className="surface-card p-4">
-          <p className="text-xs text-muted-foreground">Listos / enviados</p>
-          <p className="mt-1 font-display text-2xl font-bold text-success">{resumen.listos}</p>
-        </div>
-
-        <div className="surface-card p-4">
-          <p className="text-xs text-muted-foreground">Necesitan revisión</p>
-          <p className="mt-1 font-display text-2xl font-bold text-destructive">{resumen.revisar}</p>
-        </div>
-      </div>
-
-      <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-        <div className="flex gap-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <p className="font-semibold">Modo seguro: no se envía nada a SIEC real.</p>
-            <p>Esta pantalla solo prepara, valida y simula el proceso antes de una futura integración real.</p>
-          </div>
-        </div>
-      </div>
-
-      {lotes.length === 0 ? (
+      {loading ? (
         <div className="surface-card p-8 text-center">
-          <p className="font-display text-lg font-semibold">No hay lotes preparados.</p>
+          <p className="font-display text-lg font-semibold">Cargando cola...</p>
+        </div>
+      ) : partesAgrupados.length === 0 ? (
+        <div className="surface-card p-8 text-center">
+          <p className="font-display text-lg font-semibold">No hay incidencias pendientes</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ve a Revisión y pulsa “Preparar lote SIEC”.
+            Cuando envíes un parte al siguiente paso, aparecerá aquí agrupado con sus incidencias.
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {lotes.map((l) => {
-            const EstadoIcono = getEstadoIcono(l.estado);
-            const detalleVisible = detalleAbierto === l.id;
+        <div className="space-y-5">
+          {partesAgrupados.map((parte) => {
+            const seleccionParte = seleccionadas[parte.id] ?? new Set<string>();
+            const totalPendientes = parte.incidencias.length;
+            const totalSeleccionadas = parte.incidencias.filter((incidencia) =>
+              seleccionParte.has(incidencia.id)
+            ).length;
+            const todasSeleccionadas =
+              totalPendientes > 0 && totalSeleccionadas === totalPendientes;
 
             return (
-              <div key={l.id} className="surface-card p-5 hover:shadow-md">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{l.fechaCreacion}</p>
-                    <p className="mt-1 font-display text-lg font-bold">Lote SIEC</p>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">{l.id}</p>
-                  </div>
+              <section key={parte.id} className="surface-card overflow-hidden">
+                <div className="border-b border-border bg-muted/20 p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {parte.centro} · {parte.fecha}
+                      </p>
+                      <h3 className="mt-1 font-display text-lg font-semibold">{parte.titulo}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {totalPendientes} pendientes · {totalSeleccionadas} seleccionadas
+                      </p>
+                    </div>
 
-                  <StatusBadge estado={l.estado} label={getEstadoUsuario(l.estado)} />
-                </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium">
+                        <input
+                          type="checkbox"
+                          checked={todasSeleccionadas}
+                          disabled={isVisor}
+                          onChange={() => toggleTodas(parte)}
+                          className="h-4 w-4"
+                        />
+                        Seleccionar todas
+                      </label>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Incidencias</p>
-                    <p className="mt-1 font-display text-xl font-bold">{l.incidenciasIds.length}</p>
-                  </div>
-
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Estado</p>
-                    <div className="mt-1 flex items-center gap-2 text-sm font-semibold">
-                      <EstadoIcono className="h-4 w-4" />
-                      {getEstadoUsuario(l.estado)}
+                      <Button
+                        size="sm"
+                        disabled={isVisor || totalSeleccionadas === 0}
+                        onClick={() => enviarSeleccionadas(parte)}
+                      >
+                        Enviar seleccionadas a SIEC
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Usuario</p>
-                    <p className="mt-1 truncate text-sm font-semibold">{l.creadoPor}</p>
-                  </div>
                 </div>
 
-                {l.errores && l.errores.length > 0 && (
-                  <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                    Hay errores en este lote. Revisa los detalles antes de continuar.
-                  </div>
-                )}
+                <div className="divide-y divide-border">
+                  {parte.incidencias.map((incidencia, index) => (
+                    <article key={incidencia.id} className="p-4">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={seleccionParte.has(incidencia.id)}
+                            disabled={isVisor}
+                            onChange={() => toggleIncidencia(parte.id, incidencia.id)}
+                            className="mt-1 h-4 w-4 shrink-0"
+                            aria-label={`Seleccionar incidencia ${index + 1}`}
+                          />
 
-                {l.warnings && l.warnings.length > 0 && (
-                  <div className="mt-4 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                    Hay avisos o posibles duplicados. No bloquean el proceso, pero conviene revisarlos.
-                  </div>
-                )}
-
-                {l.respuestaSimulada && (
-                  <div className="mt-4 rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
-                    {l.estado === "enviado_simulado"
-                      ? "Envío simulado completado correctamente."
-                      : l.respuestaSimulada}
-                  </div>
-                )}
-
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  {l.estado === "simulado_ok" && (
-                    <Button
-                      className="flex-1 bg-success text-white"
-                      onClick={() => {
-                        approveBatchForSend(l.id);
-                        refreshBatches();
-                      }}
-                    >
-                      Aprobar
-                    </Button>
-                  )}
-
-                  {l.estado === "aprobado_para_envio" && (
-                    <Button
-                      className="flex-1 bg-primary text-primary-foreground"
-                      onClick={() => {
-                        validateBatchBeforeSend(l.id);
-                        refreshBatches();
-                      }}
-                    >
-                      Validar antes de enviar
-                    </Button>
-                  )}
-
-                  {l.estado === "listo_para_envio" && (
-                    <Button
-                      className="flex-1 bg-gradient-primary text-primary-foreground"
-                      onClick={() => {
-                        sendBatchSimulated(l.id);
-                        refreshBatches();
-                      }}
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      Enviar simulado
-                    </Button>
-                  )}
-
-                  {l.estado === "error_envio_simulado" && (
-                    <Button
-                      className="flex-1 bg-gradient-primary text-primary-foreground"
-                      onClick={() => {
-                        sendBatchSimulated(l.id);
-                        refreshBatches();
-                      }}
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      Reintentar envío
-                    </Button>
-                  )}
-
-                  {l.payloadPreview && l.payloadPreview.length > 0 && (
-                    <Button variant="outline" className="flex-1" onClick={() => exportBatchToCSV(l)}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar CSV
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setDetalleAbierto(detalleVisible ? null : l.id)}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    {detalleVisible ? "Ocultar detalles" : "Ver detalles"}
-                  </Button>
+                          <div className="min-w-0 flex-1">
+                            <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                              Incidencia {index + 1}
+                            </p>
+                            <p className="text-sm leading-relaxed text-foreground">
+                              {getTextoIncidencia(incidencia)}
+                            </p>
+                            <p className="mt-2 text-xs font-semibold text-primary">
+                              Pendiente SIEC
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
                 </div>
-
-                {detalleVisible && (
-                  <div className="mt-5 space-y-4 border-t border-border pt-4">
-                    {l.errores && l.errores.length > 0 && (
-                      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                        <p className="mb-2 font-semibold">Errores detectados:</p>
-                        {l.errores.map((e, i) => (
-                          <p key={i}>• {e}</p>
-                        ))}
-                      </div>
-                    )}
-
-                    {l.warnings && l.warnings.length > 0 && (
-                      <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                        <p className="mb-2 font-semibold">Avisos:</p>
-                        {l.warnings.map((warning, i) => (
-                          <p key={i}>• {warning}</p>
-                        ))}
-                      </div>
-                    )}
-
-                    {l.payloadPreview && l.payloadPreview.length > 0 && (
-                      <div className="rounded-md border border-border bg-muted/40 p-3">
-                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          <Eye className="h-3.5 w-3.5" />
-                          Datos preparados para SIEC
-                        </div>
-
-                        <div className="space-y-2 text-xs">
-                          {l.payloadPreview.map((item) => (
-                            <div key={item.incidenciaId} className="rounded-md border border-border bg-background p-3">
-                              <p className="font-semibold">{item.asunto}</p>
-                              <p className="mt-1 text-muted-foreground">{item.descripcion}</p>
-                              <p className="mt-2 text-[11px] text-muted-foreground">
-                                {item.tema} · {item.categoria} · {item.grupo}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {l.logs && l.logs.length > 0 && (
-                      <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          <History className="h-3.5 w-3.5" />
-                          Historial del lote
-                        </div>
-
-                        <div className="max-h-48 space-y-2 overflow-auto text-xs">
-                          {l.logs.slice().reverse().map((log) => (
-                            <div key={log.id} className="rounded-md border border-border bg-background p-2">
-                              <div className="flex justify-between gap-3 text-[10px] text-muted-foreground">
-                                <span>{new Date(log.fecha).toLocaleString()}</span>
-                                <span className="uppercase">{log.tipo}</span>
-                              </div>
-                              <div className="mt-1">{log.mensaje}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              </section>
             );
           })}
         </div>

@@ -1,66 +1,43 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
+import { Lock, Mail, Loader2, Eye, EyeOff } from "lucide-react";
 import logoLcc from "@/assets/logo-lcc.png";
-import { isMockMode } from "@/config/data-mode";
-
-import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [email, setEmail] = useState(isMockMode ? "admin" : "admin@siecbridge.io");
-  const [password, setPassword] = useState(isMockMode ? "demo" : "demo1234");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberSession, setRememberSession] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    if (isMockMode) {
-      const isValidMockLogin =
-        (email === "admin" || email === "admin@siecbridge.io") && password === "demo";
-
-      if (!isValidMockLogin) {
-        toast({
-          variant: "destructive",
-          title: "Credenciales de demo incorrectas",
-          description: "Usa admin / demo para acceder en modo mock.",
-        });
-        setLoading(false);
-        return;
-      }
-
-      toast({
-        title: "Modo Preview (Mock)",
-        description: "Iniciando sesión en modo demostración.",
-      });
-      setTimeout(() => {
-        navigate("/dashboard");
-        setLoading(false);
-      }, 1000);
-      return;
-    }
-
     if (!isSupabaseConfigured) {
       toast({
         variant: "destructive",
         title: "Supabase no está configurado",
-        description: "Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY o usa VITE_DATA_MODE=mock.",
+        description: "Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en el entorno.",
       });
       setLoading(false);
       return;
     }
 
     try {
+      localStorage.setItem("siec-remember-session", rememberSession ? "true" : "false");
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -70,15 +47,22 @@ export default function Login() {
           title: "Error de acceso",
           description: error.message,
         });
-      } else {
-        toast({
-          title: "Bienvenido",
-          description: "Has iniciado sesión correctamente.",
-        });
-        navigate("/dashboard");
+        return;
       }
+
+      toast({
+        title: "Bienvenido",
+        description: "Has iniciado sesión correctamente.",
+      });
+
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
+      toast({
+        variant: "destructive",
+        title: "Error de acceso",
+        description: "No se pudo iniciar sesión.",
+      });
     } finally {
       setLoading(false);
     }
@@ -86,119 +70,91 @@ export default function Login() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
-      {/* Decorative background */}
       <div className="absolute inset-0 bg-gradient-hero" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,hsl(var(--foreground)/0.04)_1px,transparent_0)] [background-size:24px_24px]" />
 
       <div className="relative grid min-h-screen lg:grid-cols-2">
-        {/* Left — brand panel */}
-        <div className="hidden flex-col justify-between bg-gradient-primary p-12 text-primary-foreground lg:flex">
+        <div className="hidden lg:flex flex-col justify-between bg-gradient-primary p-12 text-primary-foreground">
           <div className="flex items-center gap-4">
-            <img src={logoLcc} alt="SIEC Bridge LCC" className="object-contain" style={{ height: "5.5rem", width: "5.5rem" }} />
+            <img src={logoLcc} alt="SIEC Bridge LCC" style={{ height: "5.5rem" }} />
             <div>
-              <p className="font-display text-3xl font-bold">SIEC Bridge LCC</p>
-              <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Centro de Control</p>
+              <p className="text-3xl font-bold">SIEC Bridge LCC</p>
+              <p className="text-xs uppercase">Centro de Control</p>
             </div>
           </div>
 
-          <div className="space-y-6">
-            <h2 className="font-display text-4xl font-bold leading-tight tracking-tight">
-              Control inteligente de incidencias antes de SIEC.
-            </h2>
-            <p className="max-w-md text-base text-primary-foreground/70">
-              Revisa, edita y envía tus partes de mantenimiento con total trazabilidad.
-              Una capa de control entre tu equipo de campo y la plataforma corporativa.
-            </p>
-            <div className="grid gap-3 text-sm">
-              {[
-                "Revisión asistida con OCR",
-                "Validación previa a la integración",
-                "Trazabilidad completa por lote",
-              ].map((t) => (
-                <div key={t} className="flex items-center gap-2.5">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10">
-                    <ShieldCheck className="h-3 w-3" />
-                  </div>
-                  <span className="text-primary-foreground/85">{t}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-xs text-primary-foreground/50">© 2025 SIEC Bridge LCC · Plataforma interna</p>
+          <h2 className="text-4xl font-bold">
+            Control inteligente de incidencias antes de SIEC
+          </h2>
         </div>
 
-        {/* Right — form */}
-        <div className="flex items-center justify-center p-6 md:p-12">
+        <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-md">
-            <div className="mb-8 lg:hidden">
-              <div className="inline-flex items-center gap-3">
-                <img src={logoLcc} alt="SIEC Bridge LCC" className="h-20 w-20 object-contain" />
-                <span className="font-display text-3xl font-bold">SIEC Bridge LCC</span>
-              </div>
-            </div>
 
-            <div className="mb-8">
-              <h1 className="font-display text-3xl font-bold tracking-tight">Bienvenido de nuevo</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Accede a tu panel de control para revisar incidencias.
-              </p>
-            </div>
+            <h1 className="text-3xl font-bold mb-6">Iniciar sesión</h1>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email">Correo corporativo</Label>
+
+              {/* EMAIL */}
+              <div>
+                <Label htmlFor="email">Correo</Label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    id="email" 
-                    type={isMockMode ? "text" : "email"}
-                    placeholder={isMockMode ? "admin" : "nombre@empresa.com"}
-                    value={email} 
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 pl-10" 
+                    className="pl-10"
+                    required
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <button type="button" className="text-xs font-medium text-primary hover:underline">¿Olvidaste tu contraseña?</button>
-                </div>
+
+              {/* PASSWORD */}
+              <div>
+                <Label htmlFor="password">Contraseña</Label>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
+
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 pl-10" 
+                    className="pl-10 pr-10"
+                    required
                   />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
+
+              {/* CHECKBOX */}
               <div className="flex items-center gap-2">
-                <Checkbox id="remember" defaultChecked />
-                <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">Mantener sesión iniciada</Label>
+                <Checkbox
+                  id="remember"
+                  checked={rememberSession}
+                  onCheckedChange={(checked) => setRememberSession(checked === true)}
+                />
+                <Label htmlFor="remember">Mantener sesión</Label>
               </div>
-              <Button 
-                type="submit" 
-                disabled={loading}
-                className="group h-11 w-full bg-gradient-primary text-primary-foreground hover:opacity-95 shadow-md"
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Acceder al panel"}
-                {!loading && <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
+
+              {/* BOTÓN */}
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? <Loader2 className="animate-spin" /> : "Acceder"}
               </Button>
+
             </form>
-
-            <div className="mt-6 rounded-lg bg-info/5 p-4 border border-info/10 text-[11px] text-muted-foreground">
-              <p className="font-semibold text-info mb-1 uppercase tracking-wider">Nota de desarrollo</p>
-              <p>Este sistema ahora usa <strong>Supabase Auth</strong>. Asegúrate de configurar las variables de entorno en <code>.env.local</code> y tener usuarios en tu proyecto de Supabase.</p>
-            </div>
-
-            <p className="mt-8 text-center text-xs text-muted-foreground">
-              Acceso restringido a personal autorizado · v2.4.1
-            </p>
           </div>
         </div>
       </div>

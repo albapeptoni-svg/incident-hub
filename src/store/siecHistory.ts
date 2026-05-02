@@ -1,12 +1,12 @@
 import { Incidencia } from "@/types";
 
-const STORAGE_KEY = "siec_history";
-
 type SiecHistoryItem = {
   hash: string;
   incidenciaId: string;
   fecha: string;
 };
+
+let sessionHistory: SiecHistoryItem[] = [];
 
 function normalizar(texto?: string) {
   return (texto ?? "")
@@ -27,12 +27,7 @@ export function buildIncidenciaHash(incidencia: Incidencia) {
 }
 
 export function getSiecHistory(): SiecHistoryItem[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+  return sessionHistory;
 }
 
 /**
@@ -54,10 +49,7 @@ export function addToSiecHistory(incidencias: Incidencia[]) {
 
   if (nuevos.length === 0) return;
 
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify([...nuevos, ...current])
-  );
+  sessionHistory = [...nuevos, ...current];
 }
 
 /**

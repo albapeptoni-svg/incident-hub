@@ -13,103 +13,54 @@ export type ResultadoGemini = {
   avisos: string[];
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash";
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+const GEMINI_API_URL =
+  (import.meta.env.VITE_GEMINI_API_URL as string | undefined) ||
+  "/api/analizar-parte";
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export async function analizarParteConGemini(file: File): Promise<ResultadoGemini> {
-  if (!API_KEY) {
-    throw new Error("Falta VITE_GEMINI_API_KEY en el archivo .env");
-  }
-
   if (!file) {
     throw new Error("No se ha seleccionado ningún archivo");
   }
 
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    throw new Error("Formato no permitido. Usa JPG, PNG o WEBP.");
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("La imagen supera el tamaño máximo de 8 MB.");
+  }
+
   const base64 = await fileToBase64(file);
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `Analiza este parte de trabajo manuscrito o escaneado.
-
-Extrae:
-- centro
-- fecha_visita
-- todas las líneas del parte como incidencias revisables
-
-Reglas:
-- Devuelve SOLO JSON válido.
-- Sin markdown.
-- Sin explicaciones fuera del JSON.
-- No ignores ninguna línea del parte manuscrito.
-- Incluye también CHECKLIST si aparece.
-- Si detectas CHECKLIST, créalo como incidencia revisable con:
-  titulo: "Checklist"
-  descripcion: texto original detectado
-  incluirEnSIEC: false
-  confianza: "alta"
-- Las incidencias reales deben tener incluirEnSIEC: true por defecto.
-- La decisión final de incluir o no cada línea la toma el usuario revisor.
-- Genera un título breve por incidencia.
-- Conserva la descripción lo más fiel posible al texto original.
-
-Formato:
-{
-  "centro": "",
-  "fecha_visita": "",
-  "incidencias": [
-    {
-      "titulo": "",
-      "descripcion": "",
-      "incluirEnSIEC": true,
-      "confianza": "media"
-    }
-  ],
-  "texto_original_detectado": "",
-  "avisos": []
-}`,
-              },
-              {
-                inlineData: {
-                  mimeType: file.type || "image/jpeg",
-                  data: base64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
+  const response = await fetch(GEMINI_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "same-origin",
+    body: JSON.stringify({
+      imageBase64: base64,
+      mimeType: file.type,
+    }),
+  });
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message = data?.error?.message || `Error Gemini ${response.status}`;
+    const message =
+      typeof data?.error === "string"
+        ? data.error
+        : data?.error?.message || mapGeminiHttpError(response.status);
     throw new Error(message);
   }
 
-  const respuestaGemini = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!respuestaGemini) {
+  if (!data) {
     throw new Error("Gemini no devolvió respuesta válida");
   }
 
-  return normalizarRespuestaGemini(respuestaGemini);
+  return normalizarRespuestaGemini(data);
 }
 
 export function normalizarRespuestaGemini(respuesta: unknown): ResultadoGemini {
@@ -145,6 +96,15 @@ export function normalizarRespuestaGemini(respuesta: unknown): ResultadoGemini {
 }
 
 function normalizarIncidencia(item: unknown): IncidenciaGemini {
+  if (typeof item === "string") {
+    return {
+      titulo: item.trim().slice(0, 80) || "Incidencia sin título",
+      descripcion: item.trim(),
+      incluirEnSIEC: true,
+      confianza: "media",
+    };
+  }
+
   if (!isObject(item)) {
     return {
       titulo: "Incidencia sin título",
@@ -226,4 +186,20 @@ function fileToBase64(file: File): Promise<string> {
 
     reader.readAsDataURL(file);
   });
+}
+
+function mapGeminiHttpError(status: number): string {
+  if (status === 404) {
+    return "Modelo Gemini no encontrado o no compatible. Revisa el modelo configurado.";
+  }
+
+  if (status === 401 || status === 403) {
+    return "API key no válida o sin permisos.";
+  }
+
+  if (status === 429) {
+    return "Límite de uso de Gemini alcanzado.";
+  }
+
+  return `Error analizando parte con Gemini (${status}).`;
 }

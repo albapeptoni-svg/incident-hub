@@ -8,7 +8,7 @@ function normalizeDataMode(value: unknown): DataMode {
     : "auto";
 }
 
-const FORCE_MOCK_MODE = true;
+const FORCE_MOCK_MODE = false;
 
 export const dataMode: DataMode = FORCE_MOCK_MODE
   ? "mock"

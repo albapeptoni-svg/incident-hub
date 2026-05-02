@@ -1,125 +1,353 @@
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/utils";
-import { Plus, Settings2, Shield, UserPlus, Loader2 } from "lucide-react";
-import { useUsuarios, useCentros } from "@/hooks/use-data";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { Save, Settings2, Shield, UserPlus, Wrench, Trash2 } from "lucide-react";
+import {
+  operationalDataService,
+  type AppConfig,
+} from "@/services/operationalData.service";
+
+type Rol = "admin" | "tecnico" | "visor";
+
+type ProfileRow = {
+  id: string;
+  nombre: string | null;
+  email: string;
+  rol: Rol;
+  activo: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
+};
+
+const DEFAULT_CONFIG: AppConfig = {
+  nombreEmpresa: "",
+  entorno: "pruebas",
+  modoSiec: "simulado",
+  emailResponsable: "",
+};
 
 export default function Admin() {
-  const { data: usuarios = [], isLoading: loadingUsuarios } = useUsuarios();
-  const { data: centros = [], isLoading: loadingCentros } = useCentros();
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
+  const [mensaje, setMensaje] = useState("");
 
-  if (loadingUsuarios || loadingCentros) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+  const mostrarMensaje = (texto: string) => {
+    setMensaje(texto);
+    window.setTimeout(() => setMensaje(""), 3500);
+  };
+
+  const cargarProfiles = async () => {
+    if (!isSupabaseConfigured) return;
+
+    setLoadingProfiles(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,nombre,email,rol,activo,creado_en,actualizado_en")
+      .order("creado_en", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      mostrarMensaje("No se pudieron cargar los profiles.");
+    } else {
+      setProfiles((data || []) as ProfileRow[]);
+    }
+
+    setLoadingProfiles(false);
+  };
+
+  const cargarConfig = async () => {
+    try {
+      setConfig(await operationalDataService.getAppConfig());
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo cargar la configuración.");
+    }
+  };
+
+  useEffect(() => {
+    cargarConfig();
+    cargarProfiles();
+  }, []);
+
+  const actualizarProfile = async (id: string, patch: Partial<Pick<ProfileRow, "rol" | "activo">>) => {
+    const anteriores = profiles;
+    const actualizados = profiles.map((profile) =>
+      profile.id === id ? { ...profile, ...patch } : profile
     );
-  }
+
+    setProfiles(actualizados);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ ...patch, actualizado_en: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      setProfiles(anteriores);
+      mostrarMensaje("No se pudo actualizar el profile.");
+    } else {
+      mostrarMensaje("Profile actualizado.");
+    }
+  };
+
+  const guardarConfiguracion = async () => {
+    try {
+      await operationalDataService.saveAppConfig(config);
+      mostrarMensaje("Configuración guardada.");
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo guardar la configuración.");
+    }
+  };
+
+  const limpiarDatosPrueba = async () => {
+    const confirmar = window.confirm(
+      "¿Limpiar partes, incidencias, cola e historial de Supabase? Usuarios reales, perfiles, roles y configuración se conservarán."
+    );
+    if (!confirmar) return;
+
+    try {
+      await operationalDataService.resetOperationalTestingData();
+      mostrarMensaje("Datos de prueba eliminados de Supabase.");
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudieron limpiar los datos de prueba. Revisa permisos de admin y SQL 005.");
+    }
+  };
+
+  const restablecerConfiguracion = async () => {
+    const confirmar = window.confirm("¿Restablecer la configuración general?");
+    if (!confirmar) return;
+
+    try {
+      await operationalDataService.saveAppConfig(DEFAULT_CONFIG);
+      setConfig(DEFAULT_CONFIG);
+      mostrarMensaje("Configuración restablecida.");
+    } catch (error) {
+      console.error(error);
+      mostrarMensaje("No se pudo restablecer la configuración.");
+    }
+  };
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Administración"
-        title="Configuración y usuarios"
-        subtitle="Solo visible para administradores. Gestión de cuentas y parámetros del sistema."
-        actions={<Button size="sm" className="bg-gradient-primary text-primary-foreground"><UserPlus className="mr-2 h-4 w-4" /> Nuevo usuario</Button>}
+        title="Seguridad y configuración"
+        subtitle="Usuarios reales de Supabase Auth, roles de acceso y ajustes de operación en Supabase."
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="surface-card overflow-hidden lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div>
-              <h3 className="font-display text-base font-semibold">Usuarios</h3>
-              <p className="text-xs text-muted-foreground">{usuarios.length} cuentas activas</p>
-            </div>
-            <Button variant="outline" size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> Añadir</Button>
-          </div>
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <th className="px-5 py-3">Usuario</th>
-                  <th className="px-5 py-3">Rol</th>
-                  <th className="px-5 py-3">Centro</th>
-                  <th className="px-5 py-3">Último acceso</th>
-                  <th className="px-5 py-3">Activo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u) => {
-                  const centro = centros.find(c => c.id === u.centroId);
-                  return (
-                    <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                            {u.nombre.split(" ").map((s) => s[0]).slice(0,2).join("")}
-                          </div>
-                          <div>
-                            <p className="font-medium">{u.nombre}</p>
-                            <p className="text-xs text-muted-foreground">{u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-                          u.rol === "admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                        )}>
-                          <Shield className="h-3 w-3" /> {u.rol}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-muted-foreground">{centro?.nombre ?? "Global"}</td>
-                      <td className="px-5 py-3.5 text-muted-foreground">{u.ultimoAcceso || "—"}</td>
-                      <td className="px-5 py-3.5"><Switch defaultChecked={u.activo} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      {mensaje && (
+        <div className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+          {mensaje}
         </div>
+      )}
 
-        <div className="space-y-4">
-          <div className="surface-card p-5">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <section className="surface-card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-border px-5 py-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                <h2 className="font-display text-base font-semibold">Profiles</h2>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Perfiles vinculados a usuarios de Supabase Auth.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={cargarProfiles} disabled={loadingProfiles}>
+              Actualizar
+            </Button>
+          </div>
+
+          {!isSupabaseConfigured ? (
+            <div className="p-8 text-center">
+              <p className="font-display text-lg font-semibold">Supabase no está configurado.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para gestionar usuarios reales.
+              </p>
+            </div>
+          ) : profiles.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="font-display text-lg font-semibold">No hay profiles visibles.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Crea usuarios en Supabase Auth y ejecuta el SQL de profiles para generar perfiles.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="px-5 py-3">Usuario</th>
+                    <th className="px-5 py-3">Rol</th>
+                    <th className="px-5 py-3">Creado</th>
+                    <th className="px-5 py-3">Activo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profiles.map((profile) => (
+                    <tr key={profile.id} className="border-b border-border last:border-0">
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium">{profile.nombre || profile.email}</p>
+                        <p className="text-xs text-muted-foreground">{profile.email}</p>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <select
+                          value={profile.rol}
+                          onChange={(event) =>
+                            actualizarProfile(profile.id, { rol: event.target.value as Rol })
+                          }
+                          className={cn(
+                            "h-9 rounded-md border border-input bg-background px-3 text-sm",
+                            profile.rol === "admin" && "font-semibold text-primary"
+                          )}
+                        >
+                          <option value="admin">admin</option>
+                          <option value="tecnico">tecnico</option>
+                          <option value="visor">visor</option>
+                        </select>
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground">
+                        {profile.creado_en
+                          ? new Date(profile.creado_en).toLocaleString("es-ES")
+                          : "Sin fecha"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Switch
+                          checked={profile.activo}
+                          onCheckedChange={(checked) =>
+                            actualizarProfile(profile.id, { activo: checked })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="border-t border-border bg-muted/20 p-5">
+            <div className="flex items-start gap-3">
+              <UserPlus className="mt-0.5 h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Alta de usuarios</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Las contraseñas no se gestionan desde el frontend. Crea usuarios desde
+                  Supabase Auth &gt; Users o implementa una Edge Function segura para invitaciones.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="space-y-6">
+          <section className="surface-card p-5">
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-primary" />
-              <h3 className="font-display text-base font-semibold">Parámetros SIEC</h3>
+              <h2 className="font-display text-base font-semibold">Configuración general</h2>
             </div>
+
             <div className="mt-4 space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="endpoint" className="text-xs">Endpoint API</Label>
-                <Input id="endpoint" defaultValue="https://api.siec.empresa.com/v2" />
+                <Label htmlFor="empresa" className="text-xs">Nombre empresa</Label>
+                <Input
+                  id="empresa"
+                  value={config.nombreEmpresa}
+                  onChange={(event) =>
+                    setConfig((prev) => ({ ...prev, nombreEmpresa: event.target.value }))
+                  }
+                />
               </div>
+
               <div className="space-y-1.5">
-                <Label htmlFor="token" className="text-xs">Token de integración</Label>
-                <Input id="token" type="password" defaultValue="••••••••••••" />
+                <Label htmlFor="entorno" className="text-xs">Entorno</Label>
+                <select
+                  id="entorno"
+                  value={config.entorno}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      entorno: event.target.value as AppConfig["entorno"],
+                    }))
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="pruebas">pruebas</option>
+                  <option value="produccion">produccion</option>
+                </select>
               </div>
-              <div className="flex items-center justify-between rounded-md border border-border p-3">
-                <div>
-                  <p className="text-sm font-medium">Envío automático</p>
-                  <p className="text-xs text-muted-foreground">Procesar cola cada 15 min</p>
-                </div>
-                <Switch />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="modo-siec" className="text-xs">Modo SIEC</Label>
+                <select
+                  id="modo-siec"
+                  value={config.modoSiec}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      modoSiec: event.target.value as AppConfig["modoSiec"],
+                    }))
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="simulado">simulado</option>
+                  <option value="manual">manual</option>
+                  <option value="api_futura">api_futura</option>
+                </select>
               </div>
-              <div className="flex items-center justify-between rounded-md border border-border p-3">
-                <div>
-                  <p className="text-sm font-medium">Notificaciones email</p>
-                  <p className="text-xs text-muted-foreground">Avisos de errores SIEC</p>
-                </div>
-                <Switch defaultChecked />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="responsable" className="text-xs">Email responsable</Label>
+                <Input
+                  id="responsable"
+                  type="email"
+                  value={config.emailResponsable ?? ""}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      emailResponsable: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={guardarConfiguracion} className="flex-1">
+                  <Save className="mr-2 h-4 w-4" /> Guardar
+                </Button>
+                <Button variant="outline" onClick={restablecerConfiguracion} className="flex-1">
+                  Restablecer configuración
+                </Button>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="surface-card p-5 bg-gradient-primary text-primary-foreground">
-            <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Sistema</p>
-            <p className="mt-1 font-display text-2xl font-bold">v2.4.1</p>
-            <p className="mt-1 text-sm text-primary-foreground/80">Última actualización: hace 3 días</p>
-          </div>
+          <section className="surface-card p-5">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-warning" />
+              <h2 className="font-display text-base font-semibold">Mantenimiento</h2>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Limpia datos operativos de Supabase sin borrar usuarios reales, perfiles, roles ni configuración.
+            </p>
+
+            <Button
+              variant="destructive"
+              className="mt-4 w-full"
+              onClick={limpiarDatosPrueba}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Limpiar datos de prueba
+            </Button>
+          </section>
         </div>
       </div>
     </div>

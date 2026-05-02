@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { canAccessAdmin, canManageOperationalData } from "@/lib/permissions";
 import logoLcc from "@/assets/logo-lcc.png";
 import {
   LayoutDashboard,
   FileText,
-  ClipboardCheck,
   Workflow,
   History,
   Settings,
@@ -26,27 +26,31 @@ import {
   LogOut,
   ScanText,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Partes con IA", url: "/ocr", icon: ScanText },
+  { title: "IA Partes", url: "/ocr", icon: ScanText },
   { title: "Partes", url: "/partes", icon: FileText },
-  { title: "Revisión", url: "/revision", icon: ClipboardCheck },
   { title: "Cola SIEC", url: "/cola", icon: Workflow },
   { title: "Historial", url: "/historial", icon: History },
-];
-
-const adminItems = [
   { title: "Administración", url: "/admin", icon: Settings },
 ];
 
 export function Sidebar() {
   const { state } = useSidebar();
-  const { signOut } = useAuth();
+  const { profile, signOut } = useAuth();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const visibleItems = mainItems.filter((item) => {
+    if (item.url === "/admin") return canAccessAdmin(profile);
+    if (["/ocr", "/partes", "/cola"].includes(item.url)) {
+      return canManageOperationalData(profile);
+    }
+    return true;
+  });
 
-  const renderItem = (item: { title: string; url: string; icon: typeof LayoutDashboard; badge?: string }) => {
+  const renderItem = (item: { title: string; url: string; icon: LucideIcon }) => {
     const active = location.pathname.startsWith(item.url);
 
     return (
@@ -58,7 +62,7 @@ export function Sidebar() {
               "group relative flex items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
               active
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             )}
           >
             {active && (
@@ -67,16 +71,7 @@ export function Sidebar() {
 
             <item.icon className="h-4 w-4 shrink-0" />
 
-            {!collapsed && (
-              <>
-                <span className="flex-1">{item.title}</span>
-                {item.badge && (
-                  <span className="rounded-full bg-sidebar-primary/20 px-2 py-0.5 text-[10px] font-semibold text-sidebar-primary">
-                    {item.badge}
-                  </span>
-                )}
-              </>
-            )}
+            {!collapsed && <span className="flex-1">{item.title}</span>}
           </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -89,7 +84,7 @@ export function Sidebar() {
         <div className="flex items-center gap-3">
           <img
             src={logoLcc}
-            alt="SIEC Bridge LCC"
+            alt="LCC"
             className={cn(
               "shrink-0 object-contain",
               collapsed ? "h-10 w-10" : "h-12 w-12"
@@ -99,7 +94,7 @@ export function Sidebar() {
           {!collapsed && (
             <div className="flex flex-col leading-tight">
               <span className="font-display text-base font-bold text-sidebar-foreground">
-                SIEC Bridge LCC
+                LCC Incidencias
               </span>
               <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
                 Centro de Control
@@ -118,19 +113,9 @@ export function Sidebar() {
           )}
 
           <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">{mainItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-4">
-          {!collapsed && (
-            <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
-              Administración
-            </SidebarGroupLabel>
-          )}
-
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">{adminItems.map(renderItem)}</SidebarMenu>
+            <SidebarMenu className="gap-0.5">
+              {visibleItems.map(renderItem)}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
@@ -141,10 +126,10 @@ export function Sidebar() {
             <div className="rounded-lg bg-sidebar-accent/40 p-3">
               <div className="flex items-center gap-2 text-sidebar-foreground">
                 <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
-                <span className="text-xs font-semibold">SIEC conectado</span>
+                <span className="text-xs font-semibold">Sistema activo</span>
               </div>
               <p className="mt-1 text-[11px] text-sidebar-foreground/60">
-                API operativa · v2.4.1
+                Flujo completo operativo
               </p>
             </div>
 

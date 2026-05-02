@@ -1,9 +1,16 @@
-import { useEffect, useState, createContext, useContext } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { Session, User } from '@supabase/supabase-js';
-import { Usuario } from '@/types';
-import { isMockMode } from '@/config/data-mode';
-import { isSupabaseConfigured } from '@/integrations/supabase/client';
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import type { Session, User } from "@supabase/supabase-js";
+import type { Usuario } from "@/types";
+import {
+  canAccessAdmin,
+  canManageSiec,
+  isAdmin as checkIsAdmin,
+  isTecnico as checkIsTecnico,
+  isVisor as checkIsVisor,
+} from "@/lib/permissions";
+
+type RolUsuario = Usuario["rol"];
 
 interface AuthContextType {
   session: Session | null;
@@ -11,26 +18,36 @@ interface AuthContextType {
   profile: Usuario | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  isAdmin: boolean;
+  isTecnico: boolean;
+  isVisor: boolean;
+  canAccessAdmin: boolean;
+  canManageSiec: boolean;
 }
+
+type SupabaseProfile = {
+  id: string;
+  nombre: string | null;
+  email: string;
+  rol: RolUsuario;
+  activo: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mockUser = {
-  id: 'mock-admin-id',
-  email: 'admin@siecbridge.local',
-} as User;
-
-const mockSession = {
-  user: mockUser,
-} as Session;
-
-const mockProfile: Usuario = {
-  id: 'mock-admin-id',
-  nombre: 'Administrador Preview',
-  email: 'admin@siecbridge.local',
-  rol: 'admin',
-  activo: true,
-};
+function mapProfile(data: SupabaseProfile, fallbackUser?: User | null): Usuario {
+  return {
+    id: data.id,
+    nombre: data.nombre || fallbackUser?.email || data.email,
+    email: data.email || fallbackUser?.email || "",
+    rol: data.rol,
+    activo: data.activo,
+    ultimoAcceso: data.actualizado_en,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -38,14 +55,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (isMockMode) {
-      setSession(mockSession);
-      setUser(mockUser);
-      setProfile(mockProfile);
-      setLoading(false);
+  const fetchProfile = async (authUser: User | null) => {
+    if (!authUser || !isSupabaseConfigured) {
+      setProfile(null);
       return;
     }
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setProfile(mapProfile(data as SupabaseProfile, authUser));
+        return;
+      }
+
+      setProfile(null);
+    } catch (error) {
+      console.error("Error cargando profile:", error);
+      setProfile(null);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
 
     if (!isSupabaseConfigured) {
       setSession(null);
@@ -55,77 +93,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted) return;
+
+      const currentSession = data.session;
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      await fetchProfile(currentSession?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      window.setTimeout(() => {
+        fetchProfile(nextSession?.user ?? null);
+      }, 0);
+
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  async function fetchProfile(userId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setProfile({
-          id: data.id,
-          nombre: data.nombre,
-          email: data.email,
-          rol: data.rol,
-          centroId: data.centro_id || undefined,
-          activo: data.activo,
-          ultimoAcceso: data.ultimo_acceso || undefined,
-          avatarUrl: data.avatar_url || undefined,
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  }
-
-  const signOut = async () => {
-    if (isMockMode) {
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      return;
-    }
-
-    await supabase.auth.signOut();
+  const refreshProfile = async () => {
+    await fetchProfile(user);
   };
 
-  return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
+  const signOut = async () => {
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+  };
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      session,
+      user,
+      profile,
+      loading,
+      signOut,
+      refreshProfile,
+      isAdmin: checkIsAdmin(profile),
+      isTecnico: checkIsTecnico(profile),
+      isVisor: checkIsVisor(profile),
+      canAccessAdmin: canAccessAdmin(profile),
+      canManageSiec: canManageSiec(profile),
+    }),
+    [loading, profile, session, user]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

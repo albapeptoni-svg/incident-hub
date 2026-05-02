@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Building2, Calendar, ClipboardCheck, FileText, Hash, MapPin, User, Loader2, ImageIcon } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, Hash, MapPin, User, Loader2, ImageIcon } from "lucide-react";
 import { usePartes, useIncidencias, useCentros, useUsuarios, useFotos } from "@/hooks/use-data";
 import { useMemo } from "react";
 
@@ -59,11 +59,6 @@ export default function ParteDetail() {
         actions={
           <>
             <StatusBadge estado={parte.estado} />
-            <Button asChild className="bg-gradient-primary text-primary-foreground">
-              <Link to={`/revision?parte=${parte.id}`}>
-                <ClipboardCheck className="mr-2 h-4 w-4" /> Revisar incidencias
-              </Link>
-            </Button>
           </>
         }
       />
@@ -120,7 +115,7 @@ export default function ParteDetail() {
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold">Incidencias asociadas ({inc.length})</h4>
               <Button asChild variant="ghost" size="sm">
-                <Link to={`/revision?parte=${parte.id}`}>Abrir revisión →</Link>
+                <Link to="/partes">Abrir partes</Link>
               </Button>
             </div>
             <div className="space-y-2">

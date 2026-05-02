@@ -7,9 +7,9 @@ import {
   addToSiecHistory,
 } from "@/store/siecHistory";
 
-const STORAGE_KEY = "siec_batches";
 const MOCK_SEND_DELAY_MS = 1500;
 const MOCK_ERROR_RATE = 0.2;
+let sessionBatches: SiecBatch[] = [];
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -29,16 +29,11 @@ function appendLog(batch: SiecBatch, log: SiecBatchLog) {
 }
 
 export function getBatches(): SiecBatch[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+  return sessionBatches;
 }
 
 export function saveBatches(batches: SiecBatch[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(batches));
+  sessionBatches = batches;
   window.dispatchEvent(new Event("siec-batches-updated"));
 }
 
