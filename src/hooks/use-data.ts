@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { dataService } from "@/services/data.service";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import { isMockMode } from "@/config/data-mode";
+import { logTechnicalError } from "@/lib/safeError";
 import {
   automatizaciones as mockAutomatizaciones,
   centros as mockCentros,
@@ -25,7 +26,7 @@ export function usePartes() {
       try {
         return await dataService.getPartes();
       } catch (error) {
-        console.error("Error fetching partes, falling back to empty:", error);
+        logTechnicalError("Parts query failed", error);
         return [];
       }
     },
@@ -44,7 +45,7 @@ export function useIncidencias(parteId?: string) {
       try {
         return await dataService.getIncidencias(parteId);
       } catch (error) {
-        console.error("Error fetching incidencias, falling back to empty:", error);
+        logTechnicalError("Incidences query failed", error);
         return [];
       }
     },
@@ -60,7 +61,7 @@ export function useCentros() {
       try {
         return await dataService.getCentros();
       } catch (error) {
-        console.error("Error fetching centros, falling back to empty:", error);
+        logTechnicalError("Centers query failed", error);
         return [];
       }
     },
@@ -76,7 +77,7 @@ export function useAutomatizaciones() {
       try {
         return await dataService.getAutomatizaciones();
       } catch (error) {
-        console.error("Error fetching automatizaciones, falling back to empty:", error);
+        logTechnicalError("Automations query failed", error);
         return [];
       }
     },
@@ -92,7 +93,7 @@ export function useUsuarios() {
       try {
         return await dataService.getUsuarios();
       } catch (error) {
-        console.error("Error fetching usuarios, falling back to empty:", error);
+        logTechnicalError("Users query failed", error);
         return [];
       }
     },
@@ -108,7 +109,7 @@ export function useFotos(parteId?: string, incidenciaId?: string) {
       try {
         return await dataService.getFotos({ parteId, incidenciaId });
       } catch (error) {
-        console.error("Error fetching fotos, falling back to empty:", error);
+        logTechnicalError("Photos query failed", error);
         return [];
       }
     },

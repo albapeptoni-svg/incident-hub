@@ -8,6 +8,8 @@ import {
   operationalDataService,
   type IncidenciaColaSIEC,
 } from "@/services/operationalData.service";
+import { logger } from "@/lib/logger";
+import { SAFE_MESSAGES, getSafeUserMessage, logTechnicalError } from "@/lib/safeError";
 
 type ParteAgrupado = {
   id: string;
@@ -76,17 +78,17 @@ export default function Cola() {
         crear_en_siec: true,
         estadoParte: "listo_para_enviar",
       };
-      console.log("Consulta Cola SIEC ejecutada");
-      console.log("Filtros Cola SIEC:", filtros);
+      logger.debug("SIEC queue page loading", {
+        estado: filtros.estado,
+        estadoParte: filtros.estadoParte,
+      });
       const data = await operationalDataService.listarCola();
-      console.log("Cola SIEC - datos cargados:", data);
-      console.log("Datos recibidos Cola SIEC:", data);
-      console.log("Partes en cola cargados:", data);
+      logger.info("SIEC queue page loaded", {
+        count: data.length,
+      });
       setCola(data);
     } catch (error) {
-      console.log("Cola SIEC - error:", error);
-      console.log("Error carga Cola SIEC:", error);
-      console.error(error);
+      logTechnicalError("SIEC queue page load failed", error);
       mostrarMensaje("No se pudo cargar la Cola SIEC desde Supabase.");
     } finally {
       setLoading(false);
@@ -178,15 +180,8 @@ export default function Cola() {
         );
       }
     } catch (error) {
-      console.error(error);
-      const mensajeError = error instanceof Error ? error.message : "";
-      if (mensajeError.includes("Supabase")) {
-        mostrarMensaje("No se pudo actualizar el estado de las incidencias en Supabase.");
-      } else if (mensajeError) {
-        mostrarMensaje(mensajeError);
-      } else {
-        mostrarMensaje("No se pudo completar el envío simulado a SIEC.");
-      }
+      logTechnicalError("SIEC send failed", error);
+      mostrarMensaje(getSafeUserMessage(error, SAFE_MESSAGES.generic));
     }
   };
 

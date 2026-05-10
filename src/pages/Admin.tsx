@@ -11,6 +11,7 @@ import {
   operationalDataService,
   type AppConfig,
 } from "@/services/operationalData.service";
+import { logTechnicalError } from "@/lib/safeError";
 
 type Rol = "admin" | "tecnico" | "visor";
 
@@ -52,7 +53,7 @@ export default function Admin() {
       .order("creado_en", { ascending: false });
 
     if (error) {
-      console.error(error);
+      logTechnicalError("Admin profiles load failed", error);
       mostrarMensaje("No se pudieron cargar los profiles.");
     } else {
       setProfiles((data || []) as ProfileRow[]);
@@ -65,7 +66,7 @@ export default function Admin() {
     try {
       setConfig(await operationalDataService.getAppConfig());
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Admin config load failed", error);
       mostrarMensaje("No se pudo cargar la configuración.");
     }
   };
@@ -89,7 +90,7 @@ export default function Admin() {
       .eq("id", id);
 
     if (error) {
-      console.error(error);
+      logTechnicalError("Admin profile update failed", error);
       setProfiles(anteriores);
       mostrarMensaje("No se pudo actualizar el profile.");
     } else {
@@ -102,7 +103,7 @@ export default function Admin() {
       await operationalDataService.saveAppConfig(config);
       mostrarMensaje("Configuración guardada.");
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Admin config save failed", error);
       mostrarMensaje("No se pudo guardar la configuración.");
     }
   };
@@ -117,7 +118,7 @@ export default function Admin() {
       await operationalDataService.resetOperationalTestingData();
       mostrarMensaje("Datos de prueba eliminados de Supabase.");
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Admin testing data cleanup failed", error);
       mostrarMensaje("No se pudieron limpiar los datos de prueba. Revisa permisos de admin y SQL 005.");
     }
   };
@@ -131,7 +132,7 @@ export default function Admin() {
       setConfig(DEFAULT_CONFIG);
       mostrarMensaje("Configuración restablecida.");
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Admin config reset failed", error);
       mostrarMensaje("No se pudo restablecer la configuración.");
     }
   };

@@ -16,6 +16,8 @@ import {
   type IncidenciaParte,
   type ParteOperativo,
 } from "@/services/operationalData.service";
+import { logger } from "@/lib/logger";
+import { SAFE_MESSAGES, getSafeUserMessage, logTechnicalError } from "@/lib/safeError";
 
 const TODOS_LOS_CENTROS = "__todos__";
 const ESTADOS_ACTIVOS = new Set([
@@ -31,13 +33,6 @@ const ESTADOS_HISTORICOS = new Set([
   "confirmado",
 ]);
 const EXPANDED_PARTES_STORAGE_KEY = "siec-partes-expanded-state";
-
-type ErrorSupabaseLike = {
-  message?: string;
-  code?: string;
-  details?: string;
-  hint?: string;
-};
 
 function limpiarNumeracionInicial(texto: string): string {
   return texto
@@ -57,17 +52,6 @@ function normalizarFechaFiltro(fecha: string): string {
   const [, dia, mes, anio] = match;
   const year = anio.length === 2 ? `20${anio}` : anio;
   return `${year}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
-}
-
-function obtenerMensajeError(error: unknown) {
-  if (error && typeof error === "object") {
-    const err = error as ErrorSupabaseLike;
-    return [err.message, err.code && `Código: ${err.code}`, err.details, err.hint]
-      .filter(Boolean)
-      .join(" | ");
-  }
-
-  return typeof error === "string" ? error : "Error desconocido.";
 }
 
 function cargarExpandidosGuardados() {
@@ -125,11 +109,14 @@ export default function PartesList() {
         operationalDataService.listarPartes(false),
         operationalDataService.listarPapelera(),
       ]);
-      console.log("Partes cargados:", partesActivos);
+      logger.info("Parts list loaded", {
+        activeCount: partesActivos.length,
+        trashCount: partesPapelera.length,
+      });
       setPartes(partesActivos);
       setPapelera(partesPapelera);
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Parts list load failed", error);
       mostrarMensaje("No se pudieron cargar los partes desde Supabase.");
     } finally {
       setLoading(false);
@@ -141,9 +128,9 @@ export default function PartesList() {
   }, []);
 
   useEffect(() => {
-    console.log("Filtros activos:", {
+    logger.debug("Parts filters changed", {
       fecha: filtroFecha,
-      nombre: filtroNombre,
+      hasNameFilter: Boolean(filtroNombre),
       centro: filtroCentro,
     });
   }, [filtroCentro, filtroFecha, filtroNombre]);
@@ -176,7 +163,7 @@ export default function PartesList() {
     try {
       await operationalDataService.actualizarParte(parteId, cambios);
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Part update failed", error);
       mostrarMensaje("No se pudo actualizar el parte.");
       cargar();
     }
@@ -215,7 +202,7 @@ export default function PartesList() {
     try {
       await operationalDataService.actualizarIncidencia(incidenciaId, cambiosNormalizados);
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Incidence update failed", error);
       mostrarMensaje("No se pudo actualizar la incidencia.");
       cargar();
     }
@@ -228,12 +215,12 @@ export default function PartesList() {
     if (!confirmar) return;
 
     try {
-      console.log("Eliminando parte de Supabase:", id);
+      logger.info("Deleting part from list");
       await operationalDataService.moverParteAPapelera(id);
       await cargar();
     } catch (error) {
-      console.error("Error eliminando parte:", error);
-      mostrarMensaje(`No se pudo eliminar el parte: ${obtenerMensajeError(error)}`);
+      logTechnicalError("Part delete failed", error);
+      mostrarMensaje(getSafeUserMessage(error, SAFE_MESSAGES.generic));
     }
   };
 
@@ -246,7 +233,7 @@ export default function PartesList() {
       await operationalDataService.recuperarPapelera();
       await cargar();
     } catch (error) {
-      console.error(error);
+      logTechnicalError("Trash restore failed", error);
       mostrarMensaje("No se pudo recuperar la papelera.");
     }
   };
@@ -267,7 +254,7 @@ export default function PartesList() {
     if (!confirmar) return;
 
     try {
-      console.log("Enviando parte al siguiente paso SIEC:", parte.id);
+      logger.info("Sending part to SIEC queue");
       const result = await operationalDataService.enviarParteAColaSiec(parte.id);
       await cargar();
       alert(
@@ -276,15 +263,15 @@ export default function PartesList() {
           : `Parte enviado a Cola SIEC correctamente. Incidencias enviadas: ${result.incidenciasEnviadas}.`
       );
     } catch (error) {
-      console.error("Error enviando parte a Cola SIEC:", error);
-      const mensaje = obtenerMensajeError(error);
-      mostrarMensaje(`No se pudo enviar el parte a Cola SIEC: ${mensaje}`);
-      alert(`No se pudo enviar el parte a Cola SIEC: ${mensaje}`);
+      logTechnicalError("Send part to SIEC queue failed", error);
+      const mensaje = getSafeUserMessage(error, SAFE_MESSAGES.generic);
+      mostrarMensaje(mensaje);
+      alert(mensaje);
     }
   };
 
   const toggleExpandido = (id: string) => {
-    console.log("Parte expandido/contraído:", id);
+    logger.debug("Part expansion toggled");
     setExpandidos((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 

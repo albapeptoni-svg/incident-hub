@@ -19,6 +19,7 @@ import {
   type DashboardIncidenciaRow,
   type DashboardParteRow,
 } from "@/services/operationalData.service";
+import { logTechnicalError } from "@/lib/safeError";
 
 const ESTADOS_PARTE_HISTORICO = ["enviado", "completado"];
 const ESTADOS_PARTE_PENDIENTE = [
@@ -123,7 +124,7 @@ export default function Dashboard() {
       setPartes(data.partes ?? []);
       setIncidencias(data.incidencias ?? []);
     } catch (err) {
-      console.error(err);
+      logTechnicalError("Dashboard data load failed", err);
       setPartes([]);
       setIncidencias([]);
       setError("No se pudieron cargar los datos del Dashboard.");

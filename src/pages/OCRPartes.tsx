@@ -7,6 +7,7 @@ import {
 } from "@/services/geminiParteService";
 import { useAuth } from "@/hooks/useAuth";
 import { operationalDataService } from "@/services/operationalData.service";
+import { SAFE_MESSAGES, getSafeUserMessage, logTechnicalError } from "@/lib/safeError";
 
 type IncidenciaRevision = {
   id: number;
@@ -20,13 +21,6 @@ type ResultadoGemini = {
   centro?: string;
   fecha_visita?: string;
   incidencias?: any[];
-};
-
-type ErrorSupabaseLike = {
-  message?: string;
-  code?: string;
-  details?: string;
-  hint?: string;
 };
 
 const STORAGE_KEY = "partes-ia-revision-actual";
@@ -91,17 +85,6 @@ function normalizarFechaInput(value?: string | null) {
 
   const [, day, month, year] = match;
   return `${year.length === 2 ? `20${year}` : year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
-
-function obtenerMensajeError(error: unknown) {
-  if (error && typeof error === "object") {
-    const err = error as ErrorSupabaseLike;
-    return [err.message, err.code && `Código: ${err.code}`, err.details, err.hint]
-      .filter(Boolean)
-      .join(" | ");
-  }
-
-  return typeof error === "string" ? error : "Error desconocido.";
 }
 
 export default function OCRPartes() {
@@ -252,8 +235,9 @@ export default function OCRPartes() {
       if (nuevasIncidencias.length === 0) {
         setError("Gemini no ha detectado incidencias útiles en este parte.");
       }
-    } catch (err: any) {
-      setError(err?.message || "Error analizando el parte con Gemini.");
+    } catch (err: unknown) {
+      logTechnicalError("OCR Gemini analysis failed", err);
+      setError(getSafeUserMessage(err, SAFE_MESSAGES.ocr));
     } finally {
       setLoading(false);
     }
@@ -332,9 +316,8 @@ export default function OCRPartes() {
       alert("Parte revisado creado correctamente.");
       limpiarRevision();
     } catch (error) {
-      console.error("No se pudo guardar el parte revisado:", error);
-      const mensaje = obtenerMensajeError(error);
-      alert(`No se pudo guardar el parte en Supabase: ${mensaje}`);
+      logTechnicalError("Reviewed OCR part save failed", error);
+      alert(getSafeUserMessage(error, SAFE_MESSAGES.generic));
     }
   };
 

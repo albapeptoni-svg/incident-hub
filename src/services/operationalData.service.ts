@@ -6,6 +6,7 @@ import {
   normalizarTituloIncidencia,
 } from "@/services/geminiParteService";
 import { formatFechaES } from "@/utils";
+import { logger } from "@/lib/logger";
 
 type ParteInsert = Database["public"]["Tables"]["partes"]["Insert"];
 type ParteUpdate = Database["public"]["Tables"]["partes"]["Update"];
@@ -209,7 +210,12 @@ function isMissingColumnError(error: SupabaseErrorLike | null | undefined) {
 }
 
 function throwSupabaseError(context: string, error: SupabaseErrorLike): never {
-  console.error("ERROR SUPABASE:", error);
+  logger.error("Supabase operation failed", {
+    context,
+    code: error.code,
+    hasDetails: Boolean(error.details),
+    hasHint: Boolean(error.hint),
+  });
   const enriched = new Error(`${context}: ${error.message || "Error desconocido de Supabase."}`) as Error &
     SupabaseErrorLike;
   enriched.code = error.code;
@@ -341,7 +347,10 @@ async function insertarParteOcr(input: {
     num_incidencias: input.totalIncidencias,
   };
 
-  console.log("Insertando parte OCR:", payload);
+  logger.info("Creating OCR part", {
+    estado: payload.estado,
+    totalIncidencias: input.totalIncidencias,
+  });
 
   const result = await supabase
     .from("partes")
@@ -387,7 +396,9 @@ async function registrarAuditoriaOcr(input: {
     if (!baseResult.error) return;
   }
 
-  console.warn("No se pudo registrar auditoría de creación OCR:", enrichedResult.error);
+  logger.warn("OCR audit registration failed", {
+    code: enrichedResult.error.code,
+  });
 }
 
 async function ensureCentro(nombre: string) {
@@ -516,7 +527,9 @@ export const operationalDataService = {
       estado: "pendiente",
     }));
 
-    console.log("Insertando incidencias OCR:", incidenciasPayload);
+    logger.info("Creating OCR incidences", {
+      count: incidenciasPayload.length,
+    });
 
     const { error: incidenciasError } = await supabase.from("incidencias").insert(incidenciasPayload);
     if (incidenciasError) {
@@ -680,7 +693,7 @@ export const operationalDataService = {
 
   async moverParteAPapelera(parteId: string) {
     assertSupabase();
-    console.log("Moviendo parte a papelera:", parteId);
+    logger.info("Moving part to trash");
     const { error: incidenciasError } = await supabase
       .from("incidencias")
       .delete()
@@ -737,7 +750,7 @@ export const operationalDataService = {
     if (!parteId) throw new Error("Falta el id del parte.");
     assertEstadoParteValido(ESTADO_PARTE_LISTO_PARA_COLA);
     assertEstadoIncidenciaValido(ESTADO_INCIDENCIA_EN_COLA);
-    console.log("Enviar a Cola SIEC - parteId:", parteId);
+    logger.info("Preparing part for SIEC queue");
 
     const { data: parte, error: parteLookupError } = await supabase
       .from("partes")
@@ -752,8 +765,9 @@ export const operationalDataService = {
       throw new Error("No se encontró el parte que se quiere enviar a Cola SIEC.");
     }
 
-    console.log("Parte actual:", parte);
-    console.log("Estado actual del parte:", parte);
+    logger.debug("Loaded part before SIEC queue", {
+      estado: parte.estado,
+    });
 
     const { data: incidenciasParte, error: incidenciasParteError } = await supabase
       .from("incidencias")
@@ -764,8 +778,9 @@ export const operationalDataService = {
       throwSupabaseError("No se pudieron cargar las incidencias del parte para enviarlo a Cola SIEC", incidenciasParteError);
     }
 
-    console.log("Incidencias actuales:", incidenciasParte);
-    console.log("Incidencias actuales del parte:", incidenciasParte);
+    logger.debug("Loaded incidences before SIEC queue", {
+      count: incidenciasParte?.length || 0,
+    });
 
     const condicion = {
       tabla: "public.incidencias",
@@ -777,11 +792,15 @@ export const operationalDataService = {
       requiereParteId: parteId,
       requiereTexto: true,
     };
-    console.log("Condición usada para detectar ya en cola:", condicion);
+    logger.debug("SIEC queue visibility condition checked", {
+      estadoVisibleEnCola: condicion.estadoVisibleEnCola,
+      requiereCrearEnSiec: condicion.requiereCrearEnSiec,
+    });
 
     const candidatas = (incidenciasParte || []).filter(incidenciaEsValidaParaCola);
-    console.log("Incidencias válidas:", candidatas);
-    console.log("Incidencias válidas para SIEC:", candidatas);
+    logger.info("Valid incidences for SIEC queue", {
+      count: candidatas.length,
+    });
 
     if (candidatas.length === 0) {
       throw new Error("No hay incidencias válidas para enviar a Cola SIEC.");
@@ -797,7 +816,9 @@ export const operationalDataService = {
         estadoColaAplicado: ESTADO_INCIDENCIA_EN_COLA,
         yaEstabaEnCola: true,
       };
-      console.log("Resultado envío Cola SIEC:", result);
+      logger.info("Part was already in SIEC queue", {
+        totalIncidenciasEnCola: result.totalIncidenciasEnCola,
+      });
       return result;
     }
 
@@ -805,13 +826,10 @@ export const operationalDataService = {
       .filter((inc: any) => inc.estado !== ESTADO_INCIDENCIA_EN_COLA)
       .map((inc: any) => inc.id);
 
-    const payload = { estado: ESTADO_INCIDENCIA_EN_COLA, ids: idsEnviar, parteId };
-    console.log("Estado elegido para Cola SIEC:", ESTADO_INCIDENCIA_EN_COLA);
-    console.log("Incidencias que se enviarán a Cola SIEC:", candidatas);
-    console.log("Payload update incidencias:", payload);
-    console.log("Payload actualización incidencias:", payload);
-    console.log("Actualizando incidencias a:", ESTADO_INCIDENCIA_EN_COLA);
-    console.log("Payload envío Cola SIEC:", payload);
+    logger.info("Updating incidences for SIEC queue", {
+      estado: ESTADO_INCIDENCIA_EN_COLA,
+      count: idsEnviar.length,
+    });
 
     if (idsEnviar.length > 0) {
       const payloadIncidencias: IncidenciaUpdate = { estado: ESTADO_INCIDENCIA_EN_COLA };
@@ -826,9 +844,9 @@ export const operationalDataService = {
     }
 
     const payloadParte: ParteUpdate = { estado: ESTADO_PARTE_LISTO_PARA_COLA };
-    console.log("Payload update partes:", { parteId, ...payloadParte });
-    console.log("Payload actualización parte:", { parteId, ...payloadParte });
-    console.log("Actualizando parte a:", ESTADO_PARTE_LISTO_PARA_COLA);
+    logger.info("Updating part for SIEC queue", {
+      estado: payloadParte.estado,
+    });
 
     if (!parteEnEstadoCola) {
       const { error: parteError } = await supabase
@@ -847,7 +865,10 @@ export const operationalDataService = {
       estadoColaAplicado: ESTADO_INCIDENCIA_EN_COLA,
       yaEstabaEnCola: false,
     };
-    console.log("Resultado envío Cola SIEC:", result);
+    logger.info("Part sent to SIEC queue", {
+      incidenciasEnviadas: result.incidenciasEnviadas,
+      totalIncidenciasEnCola: result.totalIncidenciasEnCola,
+    });
     return result;
   },
 
@@ -866,8 +887,10 @@ export const operationalDataService = {
       crear_en_siec: true,
       estadoParte: ESTADO_PARTE_LISTO_PARA_COLA,
     };
-    console.log("Consulta Cola SIEC ejecutada");
-    console.log("Filtros Cola SIEC:", filtros);
+    logger.debug("Loading SIEC queue", {
+      estado: filtros.estado,
+      estadoParte: filtros.estadoParte,
+    });
 
     const { data: incidencias, error } = await supabase
       .from("incidencias")
@@ -876,9 +899,13 @@ export const operationalDataService = {
       .eq("crear_en_siec", true)
       .order("orden_linea", { ascending: true });
 
-    console.log("Datos recibidos Cola SIEC:", incidencias);
+    logger.info("SIEC queue incidences loaded", {
+      count: incidencias?.length || 0,
+    });
     if (error) {
-      console.log("Error carga Cola SIEC:", error);
+      logger.error("SIEC queue load failed", {
+        code: error.code,
+      });
       throw error;
     }
 
@@ -919,7 +946,9 @@ export const operationalDataService = {
       };
     });
 
-    console.log("Partes en cola cargados:", cola);
+    logger.info("SIEC queue parts loaded", {
+      count: cola.length,
+    });
     return cola;
   },
 
@@ -1028,10 +1057,14 @@ export const operationalDataService = {
         const payloadSinTitulo = historialPayload.map(({ titulo: _titulo, ...row }) => row);
         const fallbackHistorial = await supabase.from("siec_history" as any).insert(payloadSinTitulo);
         if (fallbackHistorial.error) {
-          console.warn("No se pudo registrar historial de envío simulado:", fallbackHistorial.error);
+          logger.warn("Simulated SIEC history fallback failed", {
+            code: fallbackHistorial.error.code,
+          });
         }
       } else {
-        console.warn("No se pudo registrar historial de envío simulado:", historial.error);
+        logger.warn("Simulated SIEC history registration failed", {
+          code: historial.error.code,
+        });
       }
     }
 
@@ -1056,11 +1089,15 @@ export const operationalDataService = {
             .update({ estado: ESTADO_PARTE_ENVIADO } as any)
             .in("id", partesEnviadas);
           if (partesUpdateError) {
-            console.warn("No se pudo actualizar el estado de los partes enviados:", partesUpdateError);
+            logger.warn("Sent part status update failed", {
+              code: partesUpdateError.code,
+            });
           }
         }
       } else {
-        console.warn("No se pudo comprobar el estado final de los partes:", partesIncidenciasError);
+        logger.warn("Final part status check failed", {
+          code: partesIncidenciasError.code,
+        });
       }
     }
 

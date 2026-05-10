@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, Mail, Loader2, Eye, EyeOff } from "lucide-react";
 import logoLcc from "@/assets/logo-lcc.png";
+import { SAFE_MESSAGES, logTechnicalError } from "@/lib/safeError";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -42,10 +43,11 @@ export default function Login() {
       });
 
       if (error) {
+        logTechnicalError("Legacy login failed", error);
         toast({
           variant: "destructive",
           title: "Error de acceso",
-          description: error.message,
+          description: SAFE_MESSAGES.auth,
         });
         return;
       }
@@ -57,7 +59,7 @@ export default function Login() {
 
       navigate("/dashboard");
     } catch (err) {
-      console.error(err);
+      logTechnicalError("Legacy login exception", err);
       toast({
         variant: "destructive",
         title: "Error de acceso",

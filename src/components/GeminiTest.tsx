@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { analizarParteConGemini } from "@/services/geminiParteService";
+import { SAFE_MESSAGES, getSafeUserMessage, logTechnicalError } from "@/lib/safeError";
 
 export default function GeminiTest() {
   const [file, setFile] = useState<File | null>(null);
@@ -14,8 +15,9 @@ export default function GeminiTest() {
     try {
       const data = await analizarParteConGemini(file);
       setResultado(data);
-    } catch (error: any) {
-      alert(error.message);
+    } catch (error: unknown) {
+      logTechnicalError("Gemini test failed", error);
+      alert(getSafeUserMessage(error, SAFE_MESSAGES.ocr));
     }
 
     setLoading(false);

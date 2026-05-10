@@ -9,6 +9,7 @@ import {
   operationalDataService,
   type ParteOperativo,
 } from "@/services/operationalData.service";
+import { logTechnicalError } from "@/lib/safeError";
 
 const TODOS_LOS_CENTROS = "__todos__";
 const TODOS_LOS_ESTADOS = "__todos__";
@@ -73,7 +74,7 @@ export default function Historial() {
       const data = await operationalDataService.listarPartesHistoricos();
       setPartes(data ?? []);
     } catch (error) {
-      console.error(error);
+      logTechnicalError("History load failed", error);
       setPartes([]);
       setHistorialError("No se pudo cargar el historial desde Supabase.");
     } finally {

@@ -257,7 +257,7 @@ Ejemplos de título:
     return jsonResponse(
       {
         error: "Error interno en gemini-ocr.",
-        message: error instanceof Error ? error.message : String(error),
+        message: "Error temporal del servicio OCR.",
       },
       500,
     );

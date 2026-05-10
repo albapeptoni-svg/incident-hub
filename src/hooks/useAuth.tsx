@@ -9,6 +9,7 @@ import {
   isTecnico as checkIsTecnico,
   isVisor as checkIsVisor,
 } from "@/lib/permissions";
+import { logTechnicalError } from "@/lib/safeError";
 
 type RolUsuario = Usuario["rol"];
 
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setProfile(null);
     } catch (error) {
-      console.error("Error cargando profile:", error);
+      logTechnicalError("Auth profile load failed", error);
       setProfile(null);
     }
   };

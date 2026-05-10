@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, HelpCircle, Lock, Mail } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
+import { SAFE_MESSAGES, logTechnicalError } from "@/lib/safeError";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,17 +21,35 @@ export default function Login() {
     setErrorMessage("");
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    localStorage.setItem("siec-remember-session", rememberSession ? "true" : "false");
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    setLoading(false);
-
-    if (error) {
-      setErrorMessage("Correo o contraseña incorrectos.");
+    if (error || !data.user) {
+      if (error) logTechnicalError("Login failed", error);
+      setLoading(false);
+      setErrorMessage(SAFE_MESSAGES.auth);
       return;
     }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("activo")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.activo) {
+      if (profileError) logTechnicalError("Login profile check failed", profileError);
+      await supabase.auth.signOut();
+      setLoading(false);
+      setErrorMessage(SAFE_MESSAGES.auth);
+      return;
+    }
+
+    setLoading(false);
 
     navigate("/dashboard");
   }

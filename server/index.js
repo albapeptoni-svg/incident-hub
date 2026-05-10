@@ -17,6 +17,15 @@ const allowedOrigins = (process.env.GEMINI_ALLOWED_ORIGINS || "http://localhost:
   .filter(Boolean);
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BASE64_LENGTH = 12_000_000;
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+function logServerError(message, error) {
+  if (!isDevelopment) return;
+  console.error(message, {
+    errorType: error instanceof Error ? error.name : typeof error,
+    hasMessage: Boolean(error?.message),
+  });
+}
 
 app.use(
   cors({
@@ -180,19 +189,17 @@ app.post("/api/analizar-parte", async (req, res) => {
     try {
       parsed = JSON.parse(rawText);
     } catch (error) {
+      logServerError("Gemini JSON parse failed", error);
       return res.status(500).json({
-        error: "Gemini no devolvió JSON válido",
-        rawText,
+        error: "Error temporal del servicio OCR.",
       });
     }
 
     return res.json(parsed);
   } catch (error) {
-    console.error("Error analizando parte con Gemini:", error);
+    logServerError("Gemini analysis failed", error);
     return res.status(500).json({
-      error: "Error analizando parte con Gemini.",
-      model: GEMINI_MODEL,
-      endpoint: GEMINI_GENERATE_ENDPOINT,
+      error: "Error temporal del servicio OCR.",
     });
   }
 });
