@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
-import { analizarParteConGemini } from "@/services/geminiParteService";
+import { useEffect, useRef, useState } from "react";
+import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  analizarParteConGemini,
+  generarTituloFallback,
+  normalizarTituloIncidencia,
+} from "@/services/geminiParteService";
 import { useAuth } from "@/hooks/useAuth";
 import { operationalDataService } from "@/services/operationalData.service";
 
 type IncidenciaRevision = {
   id: number;
+  titulo: string;
   texto: string;
   incluirEnSIEC: boolean;
+  grupo?: string;
 };
 
 type ResultadoGemini = {
@@ -23,6 +30,7 @@ type ErrorSupabaseLike = {
 };
 
 const STORAGE_KEY = "partes-ia-revision-actual";
+const BASE_IMAGE_WIDTH = 180;
 
 const correcciones: Record<string, string> = {
   maquina: "máquina",
@@ -73,6 +81,18 @@ function corregirAcentosBasicos(texto: string) {
     .join("");
 }
 
+function normalizarFechaInput(value?: string | null) {
+  if (!value) return "";
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (!match) return text;
+
+  const [, day, month, year] = match;
+  return `${year.length === 2 ? `20${year}` : year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
 function obtenerMensajeError(error: unknown) {
   if (error && typeof error === "object") {
     const err = error as ErrorSupabaseLike;
@@ -86,6 +106,7 @@ function obtenerMensajeError(error: unknown) {
 
 export default function OCRPartes() {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -94,6 +115,7 @@ export default function OCRPartes() {
   const [incidencias, setIncidencias] = useState<IncidenciaRevision[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -103,8 +125,28 @@ export default function OCRPartes() {
       const data = JSON.parse(saved);
 
       setCentro(data.centro || "");
-      setFechaVisita(data.fechaVisita || "");
-      setIncidencias(Array.isArray(data.incidencias) ? data.incidencias : []);
+      setFechaVisita(normalizarFechaInput(data.fechaVisita));
+      setIncidencias(
+        Array.isArray(data.incidencias)
+          ? data.incidencias
+              .map((inc: any, index: number) => {
+                const texto = typeof inc?.texto === "string" ? inc.texto : "";
+                const titulo = normalizarTituloIncidencia(
+                  typeof inc?.titulo === "string" ? inc.titulo : "",
+                  texto
+                );
+
+                return {
+                  id: typeof inc?.id === "number" ? inc.id : Date.now() + index,
+                  titulo,
+                  texto,
+                  incluirEnSIEC: inc?.incluirEnSIEC !== false,
+                  grupo: typeof inc?.grupo === "string" ? inc.grupo : undefined,
+                };
+              })
+              .filter((inc) => inc.texto.trim() !== "")
+          : []
+      );
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -137,6 +179,7 @@ export default function OCRPartes() {
   const seleccionarArchivo = (selected: File | null) => {
     setFile(selected);
     setError("");
+    setZoom(1);
 
     if (preview) {
       URL.revokeObjectURL(preview);
@@ -164,30 +207,39 @@ export default function OCRPartes() {
       const data: ResultadoGemini = await analizarParteConGemini(file);
 
       setCentro(data.centro || "");
-      setFechaVisita(data.fecha_visita || "");
+      setFechaVisita(normalizarFechaInput(data.fecha_visita));
 
       const nuevasIncidencias = (data.incidencias || [])
         .map((item: any, index: number) => {
           let textoBruto = "";
+          let tituloBruto = "";
           let incluir = true;
 
           if (typeof item === "string") {
             textoBruto = item;
           } else if (item && typeof item === "object") {
-            textoBruto = item.descripcion || item.titulo || "";
+            textoBruto = item.texto || item.descripcion || item.titulo || "";
+            tituloBruto = item.titulo || "";
 
             if (item.incluirEnSIEC !== undefined) {
               incluir = Boolean(item.incluirEnSIEC);
             }
           }
 
+          const texto = typeof textoBruto === "string"
+            ? corregirAcentosBasicos(textoBruto.trim())
+            : "";
+          const titulo = normalizarTituloIncidencia(
+            typeof tituloBruto === "string" ? corregirAcentosBasicos(tituloBruto.trim()) : "",
+            texto
+          );
+
           return {
             id: Date.now() + index,
-            texto:
-              typeof textoBruto === "string"
-                ? corregirAcentosBasicos(textoBruto.trim())
-                : "",
+            titulo,
+            texto,
             incluirEnSIEC: incluir,
+            grupo: typeof item?.grupo === "string" ? item.grupo : undefined,
           };
         })
         .filter(
@@ -215,10 +267,16 @@ export default function OCRPartes() {
     }
 
     setPreview(null);
+    setZoom(1);
     setCentro("");
     setFechaVisita("");
     setIncidencias([]);
     setError("");
+    setLoading(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
     localStorage.removeItem(STORAGE_KEY);
   };
@@ -264,8 +322,10 @@ export default function OCRPartes() {
               typeof inc.texto === "string" && inc.texto.trim() !== ""
           )
           .map((inc) => ({
+            titulo: normalizarTituloIncidencia(inc.titulo, inc.texto),
             texto: inc.texto.trim(),
             incluirEnSIEC: inc.incluirEnSIEC,
+            grupo: inc.grupo,
           })),
       });
 
@@ -281,7 +341,21 @@ export default function OCRPartes() {
   const cambiarTexto = (id: number, nuevoTexto: string) => {
     setIncidencias((prev) =>
       prev.map((inc) =>
-        inc.id === id ? { ...inc, texto: nuevoTexto } : inc
+        inc.id === id
+          ? {
+              ...inc,
+              texto: nuevoTexto,
+              titulo: inc.titulo.trim() ? inc.titulo : generarTituloFallback(nuevoTexto),
+            }
+          : inc
+      )
+    );
+  };
+
+  const cambiarTitulo = (id: number, nuevoTitulo: string) => {
+    setIncidencias((prev) =>
+      prev.map((inc) =>
+        inc.id === id ? { ...inc, titulo: nuevoTitulo } : inc
       )
     );
   };
@@ -297,6 +371,10 @@ export default function OCRPartes() {
   const eliminarLinea = (id: number) => {
     setIncidencias((prev) => prev.filter((inc) => inc.id !== id));
   };
+
+  const zoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 5));
+  const zoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
+  const resetZoom = () => setZoom(1);
 
   const incidenciasAEnviar = incidencias.filter(
     (inc) =>
@@ -321,6 +399,7 @@ export default function OCRPartes() {
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={(e) => seleccionarArchivo(e.target.files?.[0] || null)}
@@ -346,15 +425,64 @@ export default function OCRPartes() {
 
         {preview && (
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">
-              Parte escaneado
-            </h2>
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Parte escaneado
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Previsualización del parte
+                </p>
+              </div>
 
-            <img
-              src={preview}
-              alt="Parte subido"
-              className="w-full max-h-[520px] object-contain rounded-lg border bg-slate-100"
-            />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  aria-label="Reducir zoom"
+                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                  disabled={zoom <= 0.5}
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  aria-label="Restablecer zoom"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Vista inicial
+                </button>
+
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  aria-label="Ampliar zoom"
+                  className="inline-flex h-10 min-w-10 items-center justify-center rounded-lg border bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                  disabled={zoom >= 5}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[60vh] overflow-auto rounded-xl border bg-slate-50 p-3">
+              <div
+                className="mx-auto"
+                style={{
+                  width: `${BASE_IMAGE_WIDTH * zoom}px`,
+                  maxWidth: zoom === 1 ? "100%" : "none",
+                }}
+              >
+                <img
+                  src={preview}
+                  alt="Parte cargado para OCR"
+                  className="block h-auto w-full rounded-lg bg-white"
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -387,6 +515,7 @@ export default function OCRPartes() {
                   Fecha visita
                 </label>
                 <input
+                  type="date"
                   value={fechaVisita}
                   onChange={(e) => setFechaVisita(e.target.value)}
                   className="mt-1 w-full rounded-lg border p-2"
@@ -455,9 +584,18 @@ export default function OCRPartes() {
                 </div>
 
                 <textarea
+                  value={inc.titulo}
+                  onChange={(e) => cambiarTitulo(inc.id, e.target.value)}
+                  className="mb-2 w-full rounded-lg border bg-white p-3 text-sm font-semibold leading-relaxed"
+                  rows={1}
+                  placeholder="Título breve para SIEC"
+                />
+
+                <textarea
                   value={inc.texto}
                   onChange={(e) => cambiarTexto(inc.id, e.target.value)}
                   className="w-full rounded-lg border bg-white p-3 text-sm leading-relaxed"
+                  placeholder="Texto completo original para SIEC"
                   rows={2}
                 />
               </div>
@@ -476,9 +614,12 @@ export default function OCRPartes() {
                 {
                   centro,
                   fecha_visita: fechaVisita,
-                  incidencias: incidenciasAEnviar.map((i) =>
-                    typeof i.texto === "string" ? i.texto.trim() : ""
-                  ),
+                  incidencias: incidenciasAEnviar.map((i) => ({
+                    id: i.id,
+                    titulo: normalizarTituloIncidencia(i.titulo, i.texto),
+                    texto: typeof i.texto === "string" ? i.texto.trim() : "",
+                    incluirEnSIEC: i.incluirEnSIEC,
+                  })),
                 },
                 null,
                 2

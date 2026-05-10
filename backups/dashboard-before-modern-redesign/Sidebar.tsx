@@ -55,21 +55,21 @@ export function Sidebar() {
 
     return (
       <SidebarMenuItem key={item.title}>
-        <SidebarMenuButton asChild className="h-11">
+        <SidebarMenuButton asChild className="h-10">
           <NavLink
             to={item.url}
             className={cn(
-              "group relative flex items-center gap-3 rounded-2xl px-3 text-sm font-bold transition-all",
+              "group relative flex items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
               active
-                ? "bg-white text-slate-950 shadow-lg shadow-slate-950/20"
-                : "text-slate-400 hover:bg-white/[0.08] hover:text-white"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             )}
           >
             {active && (
-              <span className="absolute left-1 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-sky-500" />
+              <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-primary" />
             )}
 
-            <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-sky-600" : "text-slate-500 group-hover:text-white")} />
+            <item.icon className="h-4 w-4 shrink-0" />
 
             {!collapsed && <span className="flex-1">{item.title}</span>}
           </NavLink>
@@ -79,62 +79,63 @@ export function Sidebar() {
   };
 
   return (
-    <SidebarUI collapsible="icon" className="border-r border-slate-900/40 bg-slate-950">
-      <SidebarHeader className="border-b border-white/10 px-3 py-4">
+    <SidebarUI collapsible="icon" className="border-r border-sidebar-border">
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <img
-              src={logoLcc}
-              alt="SIEC Flow AI"
-              className={cn("object-contain", collapsed ? "h-8 w-8" : "h-9 w-9")}
-            />
-          </div>
+          <img
+            src={logoLcc}
+            alt="LCC"
+            className={cn(
+              "shrink-0 object-contain",
+              collapsed ? "h-10 w-10" : "h-12 w-12"
+            )}
+          />
 
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-base font-bold text-white">
-                SIEC Flow AI
+              <span className="font-display text-base font-bold text-sidebar-foreground">
+                LCC Incidencias
               </span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Control ejecutivo
+              <span className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
+                Centro de Control
               </span>
             </div>
           )}
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-4">
+      <SidebarContent className="px-2 py-3">
         <SidebarGroup>
           {!collapsed && (
-            <SidebarGroupLabel className="px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+            <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
               Principal
             </SidebarGroupLabel>
           )}
 
           <SidebarGroupContent>
-            <SidebarMenu className="gap-1.5">
+            <SidebarMenu className="gap-0.5">
               {visibleItems.map(renderItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/10 p-3">
+      <SidebarFooter className="border-t border-sidebar-border p-3">
         {!collapsed ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
-              <div className="flex items-center gap-2 text-white">
-                <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                <span className="text-xs font-bold">Sistema activo</span>
+            <div className="rounded-lg bg-sidebar-accent/40 p-3">
+              <div className="flex items-center gap-2 text-sidebar-foreground">
+                <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
+                <span className="text-xs font-semibold">Sistema activo</span>
               </div>
-              <p className="mt-1 text-[11px] font-medium text-slate-400">
+              <p className="mt-1 text-[11px] text-sidebar-foreground/60">
                 Flujo completo operativo
               </p>
             </div>
 
             <button
               onClick={() => signOut()}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:bg-red-500/10"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
               <LogOut className="h-4 w-4" />
               <span>Cerrar sesión</span>
@@ -142,9 +143,9 @@ export function Sidebar() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
-            <ShieldCheck className="h-4 w-4 text-emerald-300" />
+            <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
             <button onClick={() => signOut()} title="Cerrar sesión">
-              <LogOut className="h-4 w-4 text-red-300" />
+              <LogOut className="h-4 w-4 text-destructive" />
             </button>
           </div>
         )}

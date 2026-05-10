@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building2, Calendar, FileText, Hash, MapPin, User, Loader2, ImageIcon } from "lucide-react";
 import { usePartes, useIncidencias, useCentros, useUsuarios, useFotos } from "@/hooks/use-data";
 import { useMemo } from "react";
+import { formatFechaES } from "@/utils";
 
 export default function ParteDetail() {
   const { id } = useParams();
@@ -70,7 +71,7 @@ export default function ParteDetail() {
           <dl className="space-y-3 text-sm">
             {[
               { icon: Hash, label: "Código", val: parte.codigo },
-              { icon: Calendar, label: "Fecha", val: parte.fecha },
+              { icon: Calendar, label: "Fecha", val: formatFechaES(parte.fecha) },
               { icon: Building2, label: "Centro", val: centro?.nombre || "—" },
               { icon: User, label: "Técnico", val: tecnico?.nombre || "—" },
               { icon: FileText, label: "Incidencias", val: String(parte.numIncidencias) },

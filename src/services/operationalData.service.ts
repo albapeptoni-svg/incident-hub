@@ -1,10 +1,26 @@
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import type { Usuario } from "@/types";
+import {
+  generarTituloFallback,
+  normalizarTituloIncidencia,
+} from "@/services/geminiParteService";
+import { formatFechaES } from "@/utils";
+
+type ParteInsert = Database["public"]["Tables"]["partes"]["Insert"];
+type ParteUpdate = Database["public"]["Tables"]["partes"]["Update"];
+type IncidenciaInsert = Database["public"]["Tables"]["incidencias"]["Insert"];
+type IncidenciaUpdate = Database["public"]["Tables"]["incidencias"]["Update"];
 
 export type IncidenciaParte = {
   id: string;
+  titulo: string;
   texto: string;
   incluirEnSIEC: boolean;
+  estado?: string;
+  motivoExclusion?: string;
+  ordenLinea?: number;
+  actualizadoEn?: string;
 };
 
 export type ParteOperativo = {
@@ -16,7 +32,8 @@ export type ParteOperativo = {
   origen?: string;
   estado?: string;
   creadoEn: string;
-  enviadoEn?: string;
+  actualizadoEn?: string;
+  gestionadoEn?: string;
 };
 
 export type IncidenciaColaSIEC = {
@@ -25,9 +42,10 @@ export type IncidenciaColaSIEC = {
   parteTitulo: string;
   centro: string;
   fecha: string;
+  titulo: string;
   texto: string;
   descripcion: string;
-  estado: "pendiente_siec" | "gestionado";
+  estado: "aprobada";
   origen: string;
   creadoEn: string;
 };
@@ -46,6 +64,7 @@ export type RegistroHistorialSIEC = {
   fecha?: string;
   texto?: string;
   descripcion?: string;
+  titulo?: string;
   estado?: "gestionado";
   origen?: string;
   enviadoEn?: string;
@@ -64,14 +83,52 @@ export type AppConfig = {
 };
 
 export type OcrIncidenciaInput = {
+  titulo?: string;
   texto: string;
   incluirEnSIEC: boolean;
+  grupo?: string;
 };
 
 export type UsuarioAuditoria = {
   id?: string;
   email?: string;
   profile?: Usuario | null;
+};
+
+export type ResultadoEnvioSiecSimulado = {
+  ok: true;
+  modo: "simulado";
+  total: number;
+  enviados: {
+    id: string;
+    titulo: string;
+    estado: "enviada";
+    fechaEnvioSimulado: string;
+  }[];
+};
+
+export type DashboardParteRow = {
+  id: string;
+  titulo: string;
+  centro: string;
+  fecha: string;
+  estado: string;
+  numIncidencias?: number;
+  creadoEn?: string;
+  actualizadoEn?: string;
+};
+
+export type DashboardIncidenciaRow = {
+  id: string;
+  parteId: string;
+  titulo: string;
+  texto: string;
+  estado: string;
+  crearEnSIEC: boolean;
+  motivoExclusion?: string;
+  ordenLinea?: number;
+  creadoEn?: string;
+  actualizadoEn?: string;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -85,14 +142,48 @@ const MAX_CENTRO_LENGTH = 160;
 const MAX_INCIDENCIA_LENGTH = 2000;
 const MAX_EMAIL_LENGTH = 254;
 const ESTADOS_PARTE = new Set([
-  "revisado",
-  "pendiente_siec",
-  "preparado_siec",
-  "enviado_a_siguiente_paso",
-  "enviado_siec",
-  "gestionado",
-  "eliminado",
+  "procesado",
+  "listo_para_enviar",
+  "enviado",
+  "completado",
 ]);
+const ESTADOS_VALIDOS_INCIDENCIA = [
+  "pendiente",
+  "corregida",
+  "aprobada",
+  "descartada",
+  "enviada",
+  "confirmada",
+  "error",
+  "reenviada",
+] as const;
+const ESTADO_PARTE_LISTO_PARA_COLA = "listo_para_enviar";
+const ESTADO_INCIDENCIA_EN_COLA: (typeof ESTADOS_VALIDOS_INCIDENCIA)[number] = "aprobada";
+const ESTADO_INCIDENCIA_ENVIADA: (typeof ESTADOS_VALIDOS_INCIDENCIA)[number] = "enviada";
+const ESTADO_PARTE_ENVIADO = "enviado";
+export const SIEC_SIMULATION_MODE = true;
+const ESTADOS_PARTE_HISTORICO = ["enviado", "completado"] as const;
+const ESTADOS_VALIDOS_PARTE = [
+  "borrador",
+  "procesado",
+  "en_revision",
+  "aprobado",
+  "listo_para_enviar",
+  "enviado",
+  "completado",
+  "error",
+] as const;
+const ESTADOS_VALIDOS_PARTE_OCR = [
+  "borrador",
+  "procesado",
+  "en_revision",
+  "aprobado",
+  "listo_para_enviar",
+  "enviado",
+  "completado",
+  "error",
+] as const;
+const ESTADO_PARTE_OCR: (typeof ESTADOS_VALIDOS_PARTE_OCR)[number] = "procesado";
 
 type SupabaseErrorLike = {
   message?: string;
@@ -118,12 +209,25 @@ function isMissingColumnError(error: SupabaseErrorLike | null | undefined) {
 }
 
 function throwSupabaseError(context: string, error: SupabaseErrorLike): never {
+  console.error("ERROR SUPABASE:", error);
   const enriched = new Error(`${context}: ${error.message || "Error desconocido de Supabase."}`) as Error &
     SupabaseErrorLike;
   enriched.code = error.code;
   enriched.details = error.details;
   enriched.hint = error.hint;
   throw enriched;
+}
+
+function assertEstadoParteValido(estado: string) {
+  if (!ESTADOS_VALIDOS_PARTE.includes(estado as (typeof ESTADOS_VALIDOS_PARTE)[number])) {
+    throw new Error(`Estado inválido para parte: ${estado}`);
+  }
+}
+
+function assertEstadoIncidenciaValido(estado: string) {
+  if (!ESTADOS_VALIDOS_INCIDENCIA.includes(estado as (typeof ESTADOS_VALIDOS_INCIDENCIA)[number])) {
+    throw new Error(`Estado inválido para incidencia: ${estado}`);
+  }
 }
 
 function crearCodigo(prefix = "PAR") {
@@ -135,6 +239,10 @@ function crearCodigo(prefix = "PAR") {
 
 function normalizarTexto(texto: string) {
   return texto.trim().replace(/\s+/g, " ");
+}
+
+function esLineaChecklistSinIncidencia(texto: string) {
+  return /^checklist\s*[:.\-–—]?\s*$/i.test(texto.trim());
 }
 
 function assertLength(value: string, max: number, field: string) {
@@ -165,7 +273,53 @@ function assertFechaValida(fecha: string) {
 }
 
 function getParteTitulo(centro: string, fecha: string) {
-  return `Parte ${centro} - ${fecha}`;
+  return `Parte ${centro} - ${formatFechaES(fecha) || fecha}`;
+}
+
+function getTextoIncidenciaRow(inc: any) {
+  return (inc?.texto_corregido || inc?.descripcion || inc?.texto_ocr || "").trim();
+}
+
+function getTituloIncidenciaRow(inc: any) {
+  return normalizarTituloIncidencia((inc?.titulo || "").trim(), getTextoIncidenciaRow(inc));
+}
+
+function incidenciaEsValidaParaCola(inc: any) {
+  return Boolean(inc?.parte_id) && inc?.crear_en_siec !== false && getTextoIncidenciaRow(inc).length > 0;
+}
+
+function incidenciaEstaVisibleEnCola(inc: any, parte?: any) {
+  return (
+    incidenciaEsValidaParaCola(inc) &&
+    inc.estado === ESTADO_INCIDENCIA_EN_COLA &&
+    (!parte || parte.estado === ESTADO_PARTE_LISTO_PARA_COLA)
+  );
+}
+
+function getParteFromIncidenciaRow(inc: any) {
+  return Array.isArray(inc?.partes) ? inc.partes[0] : inc?.partes;
+}
+
+function getCentroFromParteRow(parte: any) {
+  const centro = Array.isArray(parte?.centros) ? parte.centros[0] : parte?.centros;
+  return centro?.nombre || "Centro sin indicar";
+}
+
+function validarIncidenciasParaEnvioSimulado(incidencias: any[]) {
+  if (!incidencias.length) {
+    throw new Error("No hay incidencias seleccionadas para enviar.");
+  }
+
+  const incompletas = incidencias.filter((inc) => {
+    const parte = getParteFromIncidenciaRow(inc);
+    const titulo = getTituloIncidenciaRow(inc);
+    const texto = getTextoIncidenciaRow(inc);
+    return !inc?.id || !inc?.parte_id || !parte?.id || !titulo || !texto;
+  });
+
+  if (incompletas.length > 0) {
+    throw new Error("Algunas incidencias no tienen título o descripción. Revísalas antes de enviarlas.");
+  }
 }
 
 async function insertarParteOcr(input: {
@@ -176,44 +330,30 @@ async function insertarParteOcr(input: {
   titulo: string;
   totalIncidencias: number;
 }) {
-  const basePayload = {
+  assertEstadoParteValido(ESTADO_PARTE_OCR);
+
+  const payload: ParteInsert = {
     codigo: crearCodigo(),
     fecha_visita: input.fecha,
     centro_id: input.centroId,
     tecnico_id: input.tecnicoId,
-    estado: "revisado",
+    estado: ESTADO_PARTE_OCR,
     num_incidencias: input.totalIncidencias,
   };
 
-  const enrichedPayload = {
-    ...basePayload,
-    titulo: input.titulo,
-    centro_nombre: input.centroNombre,
-    origen: "OCR/Gemini",
-  };
+  console.log("Insertando parte OCR:", payload);
 
-  const enrichedResult = await supabase
+  const result = await supabase
     .from("partes")
-    .insert(enrichedPayload as any)
+    .insert(payload)
     .select("id")
     .single();
 
-  if (!enrichedResult.error) return enrichedResult.data;
-  if (!isMissingColumnError(enrichedResult.error)) {
-    throwSupabaseError("No se pudo insertar el parte OCR en public.partes", enrichedResult.error);
+  if (result.error) {
+    throwSupabaseError("No se pudo insertar el parte OCR en public.partes", result.error);
   }
 
-  const baseResult = await supabase
-    .from("partes")
-    .insert(basePayload)
-    .select("id")
-    .single();
-
-  if (baseResult.error) {
-    throwSupabaseError("No se pudo insertar el parte OCR en public.partes", baseResult.error);
-  }
-
-  return baseResult.data;
+  return result.data;
 }
 
 async function registrarAuditoriaOcr(input: {
@@ -288,25 +428,31 @@ async function ensureCentro(nombre: string) {
 }
 
 function mapParte(row: any, incidencias: any[]): ParteOperativo {
-  const centro = row.centro_nombre || row.centros?.nombre || "Centro sin indicar";
+  const centro = row.centros?.nombre || "Centro sin indicar";
   const fecha = row.fecha_visita || "";
 
   return {
     id: row.id,
-    titulo: row.titulo || getParteTitulo(centro, fecha),
+    titulo: row.codigo || getParteTitulo(centro, fecha),
     centro,
     fecha,
-    origen: row.origen || "OCR/Gemini",
-    estado: row.estado || "revisado",
-    creadoEn: row.creado_en || row.fecha_visita || new Date().toISOString(),
-    enviadoEn: row.enviado_en || undefined,
+    origen: "OCR/Gemini",
+    estado: row.estado || "procesado",
+    creadoEn: row.fecha_visita || new Date().toISOString(),
+    actualizadoEn: row.updated_at || row.fecha_visita || "",
+    gestionadoEn: row.updated_at || row.fecha_visita || "",
     incidencias: incidencias
       .slice()
-      .sort((a, b) => (a.linea ?? 0) - (b.linea ?? 0))
+      .sort((a, b) => (a.orden_linea ?? 0) - (b.orden_linea ?? 0))
       .map((inc) => ({
         id: inc.id,
+        titulo: getTituloIncidenciaRow(inc),
         texto: inc.texto_corregido || inc.descripcion || inc.texto_ocr || "",
         incluirEnSIEC: inc.crear_en_siec !== false,
+        estado: inc.estado || "",
+        motivoExclusion: inc.motivo_exclusion || "",
+        ordenLinea: inc.orden_linea,
+        actualizadoEn: inc.updated_at || inc.created_at || "",
       })),
   };
 }
@@ -330,14 +476,22 @@ export const operationalDataService = {
     const titulo = getParteTitulo(centro.nombre, fecha);
     assertLength(titulo, MAX_TITULO_LENGTH, "Título");
     const incidencias = input.incidencias
-      .map((inc) => ({
-        texto: normalizarTexto(inc.texto),
-        incluirEnSIEC: inc.incluirEnSIEC,
-      }))
-      .filter((inc) => inc.texto);
+      .map((inc) => {
+        const texto = normalizarTexto(inc.texto);
+        return {
+          titulo: normalizarTituloIncidencia(inc.titulo || "", texto),
+          texto,
+          incluirEnSIEC: inc.incluirEnSIEC,
+          grupo: typeof inc.grupo === "string" ? inc.grupo.trim() : "",
+        };
+      })
+      .filter((inc) => inc.texto && !esLineaChecklistSinIncidencia(inc.texto));
 
-    incidencias.forEach((inc) => assertLength(inc.texto, MAX_INCIDENCIA_LENGTH, "Incidencia"));
-    if (incidencias.length === 0) throw new Error("El parte debe tener al menos una incidencia.");
+    incidencias.forEach((inc) => {
+      assertLength(inc.titulo, MAX_TITULO_LENGTH, "Título de incidencia");
+      assertLength(inc.texto, MAX_INCIDENCIA_LENGTH, "Incidencia");
+    });
+    if (incidencias.length === 0) throw new Error("No hay incidencias OCR válidas para guardar.");
 
     const parte = await insertarParteOcr({
       centroId: centro.id,
@@ -348,20 +502,23 @@ export const operationalDataService = {
       totalIncidencias: incidencias.length,
     });
 
-    const registros = incidencias.map((inc, index) => ({
+    const incidenciasPayload: IncidenciaInsert[] = incidencias.map((inc, index) => ({
       parte_id: parte.id,
-      linea: index + 1,
+      orden_linea: index + 1,
+      titulo: inc.titulo || generarTituloFallback(inc.texto),
       texto_ocr: inc.texto,
       texto_corregido: inc.texto,
       tema: "",
       descripcion: inc.texto,
       categoria: "",
-      grupo: "",
+      grupo: inc.grupo || "",
       crear_en_siec: inc.incluirEnSIEC,
-      estado: "revisado",
+      estado: "pendiente",
     }));
 
-    const { error: incidenciasError } = await supabase.from("incidencias").insert(registros);
+    console.log("Insertando incidencias OCR:", incidenciasPayload);
+
+    const { error: incidenciasError } = await supabase.from("incidencias").insert(incidenciasPayload);
     if (incidenciasError) {
       throwSupabaseError("No se pudieron insertar las incidencias OCR en public.incidencias", incidenciasError);
     }
@@ -385,11 +542,7 @@ export const operationalDataService = {
       .from("partes")
       .select("*, centros(nombre)");
 
-    if (!includeDeleted) {
-      query = query.is("eliminado_en" as any, null);
-    }
-
-    const { data, error } = await query.order("creado_en", { ascending: false } as any);
+    const { data, error } = await query.order("fecha_visita", { ascending: false });
     if (error) {
       if (!isMissingColumnError(error)) {
         throwSupabaseError("No se pudieron cargar los partes desde public.partes", error);
@@ -429,27 +582,50 @@ export const operationalDataService = {
   },
 
   async listarPapelera(): Promise<ParteOperativo[]> {
+    return [];
+  },
+
+  async listarPartesHistoricos(): Promise<ParteOperativo[]> {
     assertSupabase();
-    const { data: partes, error } = await supabase
+
+    let partes: any[] | null = null;
+    const query = supabase
       .from("partes")
       .select("*, centros(nombre)")
-      .not("eliminado_en" as any, "is", null)
-      .order("eliminado_en", { ascending: false } as any);
+      .in("estado", [...ESTADOS_PARTE_HISTORICO]);
 
+    const { data, error } = await query.order("updated_at" as any, { ascending: false } as any);
     if (error) {
-      if (isMissingColumnError(error)) return [];
-      throwSupabaseError("No se pudo cargar la papelera de partes", error);
+      if (!isMissingColumnError(error)) {
+        throwSupabaseError("No se pudieron cargar los partes históricos desde Supabase", error);
+      }
+
+      const fallback = await supabase
+        .from("partes")
+        .select("*, centros(nombre)")
+        .in("estado", [...ESTADOS_PARTE_HISTORICO])
+        .order("fecha_visita", { ascending: false });
+
+      if (fallback.error) {
+        throwSupabaseError("No se pudieron cargar los partes históricos desde Supabase", fallback.error);
+      }
+
+      partes = fallback.data;
+    } else {
+      partes = data;
     }
+
     if (!partes?.length) return [];
 
     const parteIds = partes.map((parte: any) => parte.id);
-    const { data: incidencias, error: incError } = await supabase
+    const { data: incidencias, error: incidenciasError } = await supabase
       .from("incidencias")
       .select("*")
-      .in("parte_id", parteIds);
+      .in("parte_id", parteIds)
+      .order("orden_linea", { ascending: true });
 
-    if (incError) {
-      throwSupabaseError("No se pudieron cargar las incidencias de la papelera", incError);
+    if (incidenciasError) {
+      throwSupabaseError("No se pudieron cargar las incidencias del histórico desde Supabase", incidenciasError);
     }
 
     return partes.map((parte: any) =>
@@ -463,23 +639,31 @@ export const operationalDataService = {
   async actualizarParte(parteId: string, cambios: Partial<Pick<ParteOperativo, "titulo" | "centro" | "fecha">>) {
     assertSupabase();
 
-    const patch: Record<string, unknown> = {};
-    if (typeof cambios.titulo === "string") patch.titulo = cambios.titulo.trim();
-    if (typeof patch.titulo === "string") assertLength(patch.titulo, MAX_TITULO_LENGTH, "Título");
+    const patch: ParteUpdate = {};
+    if (typeof cambios.titulo === "string") {
+      const codigo = cambios.titulo.trim();
+      assertLength(codigo, MAX_TITULO_LENGTH, "Título");
+      patch.codigo = codigo;
+    }
     if (typeof cambios.fecha === "string") patch.fecha_visita = assertFechaValida(cambios.fecha);
     if (typeof cambios.centro === "string") {
       const centro = await ensureCentro(cambios.centro);
       patch.centro_id = centro.id;
-      patch.centro_nombre = centro.nombre;
     }
 
-    const { error } = await supabase.from("partes").update(patch as any).eq("id", parteId);
+    const { error } = await supabase.from("partes").update(patch).eq("id", parteId);
     if (error) throw error;
   },
 
   async actualizarIncidencia(incidenciaId: string, cambios: Partial<IncidenciaParte>) {
     assertSupabase();
-    const patch: Record<string, unknown> = {};
+    const patch: IncidenciaUpdate = {};
+
+    if (typeof cambios.titulo === "string") {
+      const titulo = normalizarTituloIncidencia(cambios.titulo, cambios.titulo);
+      assertLength(titulo, MAX_TITULO_LENGTH, "Título de incidencia");
+      patch.titulo = titulo;
+    }
 
     if (typeof cambios.texto === "string") {
       const texto = normalizarTexto(cambios.texto);
@@ -490,117 +674,415 @@ export const operationalDataService = {
     }
     if (typeof cambios.incluirEnSIEC === "boolean") patch.crear_en_siec = cambios.incluirEnSIEC;
 
-    const { error } = await supabase.from("incidencias").update(patch as any).eq("id", incidenciaId);
+    const { error } = await supabase.from("incidencias").update(patch).eq("id", incidenciaId);
     if (error) throw error;
   },
 
   async moverParteAPapelera(parteId: string) {
     assertSupabase();
-    const { error } = await supabase
+    console.log("Moviendo parte a papelera:", parteId);
+    const { error: incidenciasError } = await supabase
+      .from("incidencias")
+      .delete()
+      .eq("parte_id", parteId);
+    if (incidenciasError) {
+      throwSupabaseError("No se pudieron borrar las incidencias asociadas al parte", incidenciasError);
+    }
+
+    const { error: parteError } = await supabase
       .from("partes")
-      .update({ estado: "eliminado", eliminado_en: new Date().toISOString() } as any)
+      .delete()
       .eq("id", parteId);
-    if (error) throw error;
+    if (parteError) {
+      throwSupabaseError("No se pudo borrar el parte", parteError);
+    }
   },
 
   async vaciarListado() {
     assertSupabase();
-    const { error } = await supabase
+    const { data: partes, error: partesError } = await supabase
       .from("partes")
-      .update({ estado: "eliminado", eliminado_en: new Date().toISOString() } as any)
-      .is("eliminado_en" as any, null);
-    if (error) throw error;
+      .select("id");
+
+    if (partesError) {
+      throwSupabaseError("No se pudieron cargar los partes antes de vaciar el listado", partesError);
+    }
+
+    const parteIds = (partes || []).map((parte: any) => parte.id);
+    if (parteIds.length === 0) return;
+
+    const { error: incidenciasError } = await supabase
+      .from("incidencias")
+      .delete()
+      .in("parte_id", parteIds);
+    if (incidenciasError) {
+      throwSupabaseError("No se pudieron borrar las incidencias antes de vaciar el listado", incidenciasError);
+    }
+
+    const { error: partesDeleteError } = await supabase
+      .from("partes")
+      .delete()
+      .in("id", parteIds);
+    if (partesDeleteError) {
+      throwSupabaseError("No se pudieron borrar los partes del listado", partesDeleteError);
+    }
   },
 
   async recuperarPapelera() {
+    return;
+  },
+
+  async enviarParteAColaSiec(parteId: string) {
     assertSupabase();
-    const { error } = await supabase
+    if (!parteId) throw new Error("Falta el id del parte.");
+    assertEstadoParteValido(ESTADO_PARTE_LISTO_PARA_COLA);
+    assertEstadoIncidenciaValido(ESTADO_INCIDENCIA_EN_COLA);
+    console.log("Enviar a Cola SIEC - parteId:", parteId);
+
+    const { data: parte, error: parteLookupError } = await supabase
       .from("partes")
-      .update({ estado: "revisado", eliminado_en: null } as any)
-      .not("eliminado_en" as any, "is", null);
-    if (error) throw error;
+      .select("id,estado")
+      .eq("id", parteId)
+      .maybeSingle();
+
+    if (parteLookupError) {
+      throwSupabaseError("No se pudo cargar el parte antes de enviarlo a Cola SIEC", parteLookupError);
+    }
+    if (!parte) {
+      throw new Error("No se encontró el parte que se quiere enviar a Cola SIEC.");
+    }
+
+    console.log("Parte actual:", parte);
+    console.log("Estado actual del parte:", parte);
+
+    const { data: incidenciasParte, error: incidenciasParteError } = await supabase
+      .from("incidencias")
+      .select("id,parte_id,estado,crear_en_siec,titulo,texto_corregido,descripcion,texto_ocr,orden_linea")
+      .eq("parte_id", parteId);
+
+    if (incidenciasParteError) {
+      throwSupabaseError("No se pudieron cargar las incidencias del parte para enviarlo a Cola SIEC", incidenciasParteError);
+    }
+
+    console.log("Incidencias actuales:", incidenciasParte);
+    console.log("Incidencias actuales del parte:", incidenciasParte);
+
+    const condicion = {
+      tabla: "public.incidencias",
+      campoEstado: "estado",
+      estadoVisibleEnCola: ESTADO_INCIDENCIA_EN_COLA,
+      estadoParteVisibleEnCola: ESTADO_PARTE_LISTO_PARA_COLA,
+      campoIncluirEnSiec: "crear_en_siec",
+      requiereCrearEnSiec: true,
+      requiereParteId: parteId,
+      requiereTexto: true,
+    };
+    console.log("Condición usada para detectar ya en cola:", condicion);
+
+    const candidatas = (incidenciasParte || []).filter(incidenciaEsValidaParaCola);
+    console.log("Incidencias válidas:", candidatas);
+    console.log("Incidencias válidas para SIEC:", candidatas);
+
+    if (candidatas.length === 0) {
+      throw new Error("No hay incidencias válidas para enviar a Cola SIEC.");
+    }
+
+    const parteEnEstadoCola = parte.estado === ESTADO_PARTE_LISTO_PARA_COLA;
+    const yaEnCola = candidatas.every((inc: any) => incidenciaEstaVisibleEnCola(inc, parte));
+    if (yaEnCola) {
+      const result = {
+        parteId,
+        incidenciasEnviadas: 0,
+        totalIncidenciasEnCola: candidatas.length,
+        estadoColaAplicado: ESTADO_INCIDENCIA_EN_COLA,
+        yaEstabaEnCola: true,
+      };
+      console.log("Resultado envío Cola SIEC:", result);
+      return result;
+    }
+
+    const idsEnviar = candidatas
+      .filter((inc: any) => inc.estado !== ESTADO_INCIDENCIA_EN_COLA)
+      .map((inc: any) => inc.id);
+
+    const payload = { estado: ESTADO_INCIDENCIA_EN_COLA, ids: idsEnviar, parteId };
+    console.log("Estado elegido para Cola SIEC:", ESTADO_INCIDENCIA_EN_COLA);
+    console.log("Incidencias que se enviarán a Cola SIEC:", candidatas);
+    console.log("Payload update incidencias:", payload);
+    console.log("Payload actualización incidencias:", payload);
+    console.log("Actualizando incidencias a:", ESTADO_INCIDENCIA_EN_COLA);
+    console.log("Payload envío Cola SIEC:", payload);
+
+    if (idsEnviar.length > 0) {
+      const payloadIncidencias: IncidenciaUpdate = { estado: ESTADO_INCIDENCIA_EN_COLA };
+      const { error: incError } = await supabase
+        .from("incidencias")
+        .update(payloadIncidencias)
+        .in("id", idsEnviar);
+
+      if (incError) {
+        throwSupabaseError("No se pudieron marcar incidencias como pendientes de SIEC", incError);
+      }
+    }
+
+    const payloadParte: ParteUpdate = { estado: ESTADO_PARTE_LISTO_PARA_COLA };
+    console.log("Payload update partes:", { parteId, ...payloadParte });
+    console.log("Payload actualización parte:", { parteId, ...payloadParte });
+    console.log("Actualizando parte a:", ESTADO_PARTE_LISTO_PARA_COLA);
+
+    if (!parteEnEstadoCola) {
+      const { error: parteError } = await supabase
+        .from("partes")
+        .update(payloadParte)
+        .eq("id", parteId);
+      if (parteError) {
+        throwSupabaseError("No se pudo actualizar el estado del parte tras enviar a Cola SIEC", parteError);
+      }
+    }
+
+    const result = {
+      parteId,
+      incidenciasEnviadas: idsEnviar.length,
+      totalIncidenciasEnCola: candidatas.length,
+      estadoColaAplicado: ESTADO_INCIDENCIA_EN_COLA,
+      yaEstabaEnCola: false,
+    };
+    console.log("Resultado envío Cola SIEC:", result);
+    return result;
   },
 
   async enviarParteACola(parte: ParteOperativo) {
-    assertSupabase();
-    const ids = parte.incidencias
-      .filter((inc) => inc.incluirEnSIEC && inc.texto.trim())
-      .map((inc) => inc.id);
-
-    if (ids.length === 0) return 0;
-
-    const { error: incError } = await supabase
-      .from("incidencias")
-      .update({ estado: "pendiente_siec" } as any)
-      .in("id", ids);
-    if (incError) throw incError;
-
-    const nuevoEstado = "enviado_a_siguiente_paso";
-    if (!ESTADOS_PARTE.has(nuevoEstado)) throw new Error("Estado de parte no permitido.");
-
-    const { error: parteError } = await supabase
-      .from("partes")
-      .update({
-        estado: nuevoEstado,
-        enviado_en: new Date().toISOString(),
-      } as any)
-      .eq("id", parte.id);
-    if (parteError) throw parteError;
-
-    return ids.length;
+    const result = await this.enviarParteAColaSiec(parte.id);
+    return result.incidenciasEnviadas;
   },
 
   async listarCola(): Promise<IncidenciaColaSIEC[]> {
     assertSupabase();
+    assertEstadoParteValido(ESTADO_PARTE_LISTO_PARA_COLA);
+    assertEstadoIncidenciaValido(ESTADO_INCIDENCIA_EN_COLA);
+    const filtros = {
+      tabla: "public.incidencias",
+      estado: ESTADO_INCIDENCIA_EN_COLA,
+      crear_en_siec: true,
+      estadoParte: ESTADO_PARTE_LISTO_PARA_COLA,
+    };
+    console.log("Consulta Cola SIEC ejecutada");
+    console.log("Filtros Cola SIEC:", filtros);
+
     const { data: incidencias, error } = await supabase
       .from("incidencias")
       .select("*")
-      .eq("estado", "pendiente_siec")
-      .order("linea", { ascending: true });
+      .eq("estado", ESTADO_INCIDENCIA_EN_COLA)
+      .eq("crear_en_siec", true)
+      .order("orden_linea", { ascending: true });
 
-    if (error) throw error;
-    if (!incidencias?.length) return [];
+    console.log("Datos recibidos Cola SIEC:", incidencias);
+    if (error) {
+      console.log("Error carga Cola SIEC:", error);
+      throw error;
+    }
 
-    const parteIds = Array.from(new Set(incidencias.map((inc: any) => inc.parte_id)));
+    const incidenciasCandidatas = (incidencias || []).filter(incidenciaEsValidaParaCola);
+    if (!incidenciasCandidatas.length) return [];
+
+    const parteIds = Array.from(new Set(incidenciasCandidatas.map((inc: any) => inc.parte_id)));
     const { data: partes, error: partesError } = await supabase
       .from("partes")
-      .select("id,titulo,fecha_visita,centro_nombre,origen,creado_en,centros(nombre)")
+      .select("id,codigo,fecha_visita,estado,centros(nombre)")
       .in("id", parteIds);
     if (partesError) throw partesError;
 
     const partesById = new Map((partes || []).map((parte: any) => [parte.id, parte]));
+    const incidenciasVisibles = incidenciasCandidatas.filter((inc: any) =>
+      incidenciaEstaVisibleEnCola(inc, partesById.get(inc.parte_id))
+    );
 
-    return incidencias.map((inc: any) => {
+    const cola = incidenciasVisibles.map((inc: any) => {
       const parte: any = partesById.get(inc.parte_id);
-      const centro = parte?.centro_nombre || parte?.centros?.nombre || "Centro sin indicar";
+      const centro = parte?.centros?.nombre || "Centro sin indicar";
       const fecha = parte?.fecha_visita || "";
-      const texto = inc.texto_corregido || inc.descripcion || inc.texto_ocr || "";
+      const texto = getTextoIncidenciaRow(inc);
+      const titulo = getTituloIncidenciaRow(inc);
 
       return {
         id: inc.id,
         parteId: inc.parte_id,
-        parteTitulo: parte?.titulo || getParteTitulo(centro, fecha),
+        parteTitulo: parte?.codigo || getParteTitulo(centro, fecha),
         centro,
         fecha,
+        titulo,
         texto,
         descripcion: texto,
-        estado: "pendiente_siec",
-        origen: parte?.origen || "parte_trabajo_ocr",
-        creadoEn: parte?.creado_en || new Date().toISOString(),
+        estado: ESTADO_INCIDENCIA_EN_COLA,
+        origen: "parte_trabajo_ocr",
+        creadoEn: parte?.fecha_visita || new Date().toISOString(),
       };
     });
+
+    console.log("Partes en cola cargados:", cola);
+    return cola;
   },
 
-  async enviarIncidenciasASiec(incidenciaIds: string[], usuario: UsuarioAuditoria) {
+  async enviarIncidenciasASiec(
+    incidenciaIds: string[],
+    usuario: UsuarioAuditoria
+  ): Promise<ResultadoEnvioSiecSimulado | void> {
     assertSupabase();
-    if (incidenciaIds.length === 0) return;
+    if (incidenciaIds.length === 0) {
+      throw new Error("No hay incidencias seleccionadas para enviar.");
+    }
     if (!usuario.id) throw new Error("No hay usuario autenticado.");
     if (usuario.email) assertLength(usuario.email, MAX_EMAIL_LENGTH, "Email");
 
-    const { error } = await supabase.rpc("gestionar_incidencias_siec" as any, {
-      incidencia_ids: incidenciaIds,
+    if (!SIEC_SIMULATION_MODE) {
+      const { error } = await supabase.rpc("gestionar_incidencias_siec" as any, {
+        incidencia_ids: incidenciaIds,
+      });
+      if (error) throw error;
+      return;
+    }
+
+    assertEstadoIncidenciaValido(ESTADO_INCIDENCIA_ENVIADA);
+    assertEstadoParteValido(ESTADO_PARTE_ENVIADO);
+
+    const now = new Date().toISOString();
+    const idsUnicos = Array.from(new Set(incidenciaIds));
+    const { data: incidencias, error: incidenciasError } = await supabase
+      .from("incidencias")
+      .select("*, partes(id,codigo,fecha_visita,estado,centros(nombre))")
+      .in("id", idsUnicos);
+
+    if (incidenciasError) {
+      throwSupabaseError("No se pudieron leer las incidencias seleccionadas para simular el envío", incidenciasError);
+    }
+
+    const seleccionadas = incidencias || [];
+    if (seleccionadas.length !== idsUnicos.length) {
+      throw new Error("No se encontraron todas las incidencias seleccionadas.");
+    }
+
+    validarIncidenciasParaEnvioSimulado(seleccionadas);
+
+    const noPreparadas = seleccionadas.filter((inc: any) => {
+      const parte = getParteFromIncidenciaRow(inc);
+      return (
+        inc.estado !== ESTADO_INCIDENCIA_EN_COLA ||
+        inc.crear_en_siec === false ||
+        parte?.estado !== ESTADO_PARTE_LISTO_PARA_COLA
+      );
     });
-    if (error) throw error;
+
+    if (noPreparadas.length > 0) {
+      throw new Error("Algunas incidencias ya no están pendientes para SIEC. Actualiza la cola y revisa la selección.");
+    }
+
+    let updateError: SupabaseErrorLike | null = null;
+    const updateResult = await supabase
+      .from("incidencias")
+      .update({ estado: ESTADO_INCIDENCIA_ENVIADA, updated_at: now } as any)
+      .in("id", idsUnicos);
+    updateError = updateResult.error;
+
+    if (updateError && isMissingColumnError(updateError)) {
+      const fallbackUpdate = await supabase
+        .from("incidencias")
+        .update({ estado: ESTADO_INCIDENCIA_ENVIADA } as any)
+        .in("id", idsUnicos);
+      updateError = fallbackUpdate.error;
+    }
+
+    if (updateError) {
+      throwSupabaseError("No se pudo actualizar el estado de las incidencias en Supabase", updateError);
+    }
+
+    const loteId = `SIM-${now.slice(0, 19).replace(/\D/g, "")}`;
+    const historialPayload = seleccionadas.map((inc: any) => {
+      const parte = getParteFromIncidenciaRow(inc);
+      const centro = getCentroFromParteRow(parte);
+      const fecha = parte?.fecha_visita || "";
+      const texto = getTextoIncidenciaRow(inc);
+      const titulo = getTituloIncidenciaRow(inc);
+
+      return {
+        lote_id: loteId,
+        parte_id: inc.parte_id,
+        parte_titulo: parte?.codigo || getParteTitulo(centro, fecha),
+        centro,
+        fecha,
+        titulo,
+        descripcion: texto,
+        estado: "enviada",
+        origen: "parte_trabajo_ocr",
+        accion: "envio_siec_simulado",
+        usuario_id: usuario.id,
+        usuario_nombre: usuario.profile?.nombre || usuario.email || null,
+        usuario_email: usuario.email || usuario.profile?.email || null,
+        usuario_rol: usuario.profile?.rol || null,
+        enviado_en: now,
+      };
+    });
+
+    const historial = await supabase.from("siec_history" as any).insert(historialPayload);
+    if (historial.error) {
+      if (isMissingColumnError(historial.error)) {
+        const payloadSinTitulo = historialPayload.map(({ titulo: _titulo, ...row }) => row);
+        const fallbackHistorial = await supabase.from("siec_history" as any).insert(payloadSinTitulo);
+        if (fallbackHistorial.error) {
+          console.warn("No se pudo registrar historial de envío simulado:", fallbackHistorial.error);
+        }
+      } else {
+        console.warn("No se pudo registrar historial de envío simulado:", historial.error);
+      }
+    }
+
+    const parteIds = Array.from(new Set(seleccionadas.map((inc: any) => inc.parte_id).filter(Boolean)));
+    if (parteIds.length > 0) {
+      const { data: incidenciasPartes, error: partesIncidenciasError } = await supabase
+        .from("incidencias")
+        .select("id,parte_id,estado,crear_en_siec")
+        .in("parte_id", parteIds);
+
+      if (!partesIncidenciasError) {
+        const partesEnviadas = parteIds.filter((parteId) => {
+          const activas = (incidenciasPartes || []).filter(
+            (inc: any) => inc.parte_id === parteId && inc.crear_en_siec !== false
+          );
+          return activas.length > 0 && activas.every((inc: any) => inc.estado === ESTADO_INCIDENCIA_ENVIADA);
+        });
+
+        if (partesEnviadas.length > 0) {
+          const { error: partesUpdateError } = await supabase
+            .from("partes")
+            .update({ estado: ESTADO_PARTE_ENVIADO } as any)
+            .in("id", partesEnviadas);
+          if (partesUpdateError) {
+            console.warn("No se pudo actualizar el estado de los partes enviados:", partesUpdateError);
+          }
+        }
+      } else {
+        console.warn("No se pudo comprobar el estado final de los partes:", partesIncidenciasError);
+      }
+    }
+
+    const enviados = seleccionadas.map((inc: any) => ({
+      id: inc.id,
+      titulo: getTituloIncidenciaRow(inc),
+      estado: ESTADO_INCIDENCIA_ENVIADA,
+      fechaEnvioSimulado: now,
+    }));
+
+    console.info("Envío simulado a SIEC completado:", {
+      loteId,
+      total: enviados.length,
+      incidencias: enviados,
+    });
+
+    return {
+      ok: true,
+      modo: "simulado",
+      total: enviados.length,
+      enviados,
+    };
   },
 
   async listarHistorial(): Promise<RegistroHistorialSIEC[]> {
@@ -619,6 +1101,7 @@ export const operationalDataService = {
       parteTitulo: row.parte_titulo,
       centro: row.centro,
       fecha: row.fecha,
+      titulo: row.titulo || generarTituloFallback(row.descripcion || ""),
       texto: row.descripcion,
       descripcion: row.descripcion,
       estado: row.estado,
@@ -633,13 +1116,60 @@ export const operationalDataService = {
   },
 
   async getDashboardData() {
-    const [partes, cola, historial] = await Promise.all([
-      this.listarPartes(false),
-      this.listarCola(),
-      this.listarHistorial(),
+    assertSupabase();
+
+    const [partesResult, incidenciasResult] = await Promise.all([
+      supabase
+        .from("partes")
+        .select("*, centros(nombre)")
+        .order("fecha_visita", { ascending: false }),
+      supabase
+        .from("incidencias")
+        .select("*")
+        .order("orden_linea", { ascending: true }),
     ]);
 
-    return { partes, cola, historial };
+    if (partesResult.error) {
+      throwSupabaseError("No se pudieron cargar los partes del Dashboard", partesResult.error);
+    }
+
+    if (incidenciasResult.error) {
+      throwSupabaseError("No se pudieron cargar las incidencias del Dashboard", incidenciasResult.error);
+    }
+
+    const partes: DashboardParteRow[] = ((partesResult.data || []) as any[]).map((parte) => {
+      const centro = Array.isArray(parte.centros) ? parte.centros[0] : parte.centros;
+      return {
+        id: parte.id,
+        titulo: parte.codigo || getParteTitulo(centro?.nombre || "Centro sin indicar", parte.fecha_visita || ""),
+        centro: centro?.nombre || "Centro sin indicar",
+        fecha: parte.fecha_visita || "",
+        estado: parte.estado || "",
+        numIncidencias: parte.num_incidencias || 0,
+        creadoEn: parte.created_at || parte.fecha_visita || "",
+        actualizadoEn: parte.updated_at || parte.fecha_visita || "",
+      };
+    });
+
+    const incidencias: DashboardIncidenciaRow[] = ((incidenciasResult.data || []) as any[]).map((inc) => ({
+      id: inc.id,
+      parteId: inc.parte_id,
+      titulo: getTituloIncidenciaRow(inc),
+      texto: getTextoIncidenciaRow(inc),
+      estado: inc.estado || "",
+      crearEnSIEC: inc.crear_en_siec !== false,
+      motivoExclusion: inc.motivo_exclusion || "",
+      ordenLinea: inc.orden_linea,
+      creadoEn: inc.created_at || "",
+      actualizadoEn: inc.updated_at || "",
+    }));
+
+    if (import.meta.env.DEV) {
+      console.info("Dashboard partes:", partes.length);
+      console.info("Dashboard incidencias:", incidencias.length);
+    }
+
+    return { partes, incidencias };
   },
 
   async getAppConfig(): Promise<AppConfig> {

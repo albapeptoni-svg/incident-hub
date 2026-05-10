@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { formatFechaES } from "@/utils";
 import {
+  SIEC_SIMULATION_MODE,
   operationalDataService,
   type IncidenciaColaSIEC,
 } from "@/services/operationalData.service";
@@ -19,6 +21,10 @@ function getTextoIncidencia(incidencia: IncidenciaColaSIEC) {
   return incidencia.texto || incidencia.descripcion || "Incidencia sin texto";
 }
 
+function getTituloIncidencia(incidencia: IncidenciaColaSIEC) {
+  return incidencia.titulo || getTextoIncidencia(incidencia).split(/\s+/).slice(0, 6).join(" ");
+}
+
 function getClaveParte(incidencia: IncidenciaColaSIEC) {
   return (
     incidencia.parteId ||
@@ -30,7 +36,7 @@ function agruparPorParte(cola: IncidenciaColaSIEC[]): ParteAgrupado[] {
   const grupos = new Map<string, ParteAgrupado>();
 
   cola.forEach((item) => {
-    if (item.estado !== "pendiente_siec") return;
+    if (item.estado !== "aprobada") return;
     const id = getClaveParte(item);
 
     if (!grupos.has(id)) {
@@ -64,8 +70,22 @@ export default function Cola() {
   const cargar = async () => {
     setLoading(true);
     try {
-      setCola(await operationalDataService.listarCola());
+      const filtros = {
+        tabla: "public.incidencias",
+        estado: "aprobada",
+        crear_en_siec: true,
+        estadoParte: "listo_para_enviar",
+      };
+      console.log("Consulta Cola SIEC ejecutada");
+      console.log("Filtros Cola SIEC:", filtros);
+      const data = await operationalDataService.listarCola();
+      console.log("Cola SIEC - datos cargados:", data);
+      console.log("Datos recibidos Cola SIEC:", data);
+      console.log("Partes en cola cargados:", data);
+      setCola(data);
     } catch (error) {
+      console.log("Cola SIEC - error:", error);
+      console.log("Error carga Cola SIEC:", error);
       console.error(error);
       mostrarMensaje("No se pudo cargar la Cola SIEC desde Supabase.");
     } finally {
@@ -135,10 +155,13 @@ export default function Cola() {
     }
 
     const idsSeleccionados = Array.from(seleccionadas[parte.id] ?? []);
-    if (idsSeleccionados.length === 0) return;
+    if (idsSeleccionados.length === 0) {
+      mostrarMensaje("No hay incidencias seleccionadas para enviar.");
+      return;
+    }
 
     try {
-      await operationalDataService.enviarIncidenciasASiec(idsSeleccionados, {
+      const resultado = await operationalDataService.enviarIncidenciasASiec(idsSeleccionados, {
         id: user?.id,
         email: user?.email,
         profile,
@@ -149,9 +172,21 @@ export default function Cola() {
         return siguiente;
       });
       await cargar();
+      if (resultado?.modo === "simulado") {
+        mostrarMensaje(
+          `Envío simulado correctamente. ${resultado.total} incidencias procesadas para SIEC.`
+        );
+      }
     } catch (error) {
       console.error(error);
-      mostrarMensaje("No se pudieron enviar las incidencias seleccionadas.");
+      const mensajeError = error instanceof Error ? error.message : "";
+      if (mensajeError.includes("Supabase")) {
+        mostrarMensaje("No se pudo actualizar el estado de las incidencias en Supabase.");
+      } else if (mensajeError) {
+        mostrarMensaje(mensajeError);
+      } else {
+        mostrarMensaje("No se pudo completar el envío simulado a SIEC.");
+      }
     }
   };
 
@@ -166,6 +201,13 @@ export default function Cola() {
       {mensaje && (
         <div className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
           {mensaje}
+        </div>
+      )}
+
+      {SIEC_SIMULATION_MODE && (
+        <div className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-semibold">Modo simulación SIEC</span>
+          <span>No se enviará nada a la plataforma SIEC real.</span>
         </div>
       )}
 
@@ -197,7 +239,7 @@ export default function Cola() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {parte.centro} · {parte.fecha}
+                        {parte.centro} · {formatFechaES(parte.fecha)}
                       </p>
                       <h3 className="mt-1 font-display text-lg font-semibold">{parte.titulo}</h3>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -222,7 +264,7 @@ export default function Cola() {
                         disabled={isVisor || totalSeleccionadas === 0}
                         onClick={() => enviarSeleccionadas(parte)}
                       >
-                        Enviar seleccionadas a SIEC
+                        {SIEC_SIMULATION_MODE ? "Simular envío a SIEC" : "Enviar seleccionadas a SIEC"}
                       </Button>
                     </div>
                   </div>
@@ -245,6 +287,9 @@ export default function Cola() {
                           <div className="min-w-0 flex-1">
                             <p className="mb-1 text-xs font-semibold text-muted-foreground">
                               Incidencia {index + 1}
+                            </p>
+                            <p className="text-sm font-semibold leading-relaxed text-foreground">
+                              {getTituloIncidencia(incidencia)}
                             </p>
                             <p className="text-sm leading-relaxed text-foreground">
                               {getTextoIncidencia(incidencia)}

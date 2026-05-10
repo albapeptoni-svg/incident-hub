@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Parte, Centro, Usuario } from "@/types";
+import { formatFechaES } from "@/utils";
 
 interface PartesTableProps {
   partes: Parte[];
@@ -33,7 +34,7 @@ export function PartesTable({ partes, centros, usuarios }: PartesTableProps) {
               return (
                 <tr key={p.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/20">
                   <td className="px-5 py-3.5 font-mono text-xs font-semibold text-foreground">{p.codigo}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{p.fecha}</td>
+                  <td className="px-5 py-3.5 text-muted-foreground">{formatFechaES(p.fecha)}</td>
                   <td className="px-5 py-3.5 font-medium">{centro?.nombre ?? "Desconocido"}</td>
                   <td className="px-5 py-3.5 text-muted-foreground">{tecnico?.nombre ?? "Desconocido"}</td>
                   <td className="px-5 py-3.5">

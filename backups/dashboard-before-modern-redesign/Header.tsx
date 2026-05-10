@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes";
-import { Bell, Command, Moon, Search, Sun } from "lucide-react";
+import { Bell, Moon, Search, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -22,18 +22,14 @@ export function Header() {
   useEffect(() => setMounted(true), []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-slate-200/80 bg-white/[0.82] px-4 backdrop-blur-2xl md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-xl md:px-6">
       <SidebarTrigger className="md:hidden" />
-      <div className="relative hidden flex-1 max-w-xl md:block">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <div className="relative hidden flex-1 max-w-md md:block">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Buscar partes, incidencias, lotes..."
-          className="h-11 rounded-full border-slate-200 bg-slate-100/70 pl-11 pr-24 text-sm font-medium shadow-inner shadow-slate-200/40 transition focus-visible:bg-white"
+          className="h-10 pl-9 bg-muted/40 border-transparent focus-visible:bg-background"
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-400 lg:inline-flex">
-          <Command className="h-3 w-3" />
-          K
-        </span>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <Button
@@ -41,23 +37,22 @@ export function Header() {
           size="icon"
           aria-label="Cambiar tema"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-950"
         >
           {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
-        <Button variant="ghost" size="icon" aria-label="Notificaciones" className="relative rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-950">
+        <Button variant="ghost" size="icon" aria-label="Notificaciones" className="relative">
           <Bell className="h-4 w-4" />
           <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white py-1 pl-1 pr-3 shadow-sm transition hover:bg-slate-50">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 font-display text-sm font-bold uppercase text-white">
+            <button className="flex items-center gap-2.5 rounded-lg border border-border bg-card pl-1 pr-3 py-1 hover:bg-muted/50 transition-colors">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-primary font-display text-sm font-semibold text-primary-foreground uppercase">
                 {profile?.nombre.split(" ").map(n => n[0]).slice(0,2).join("") || "U"}
               </div>
               <div className="hidden text-left sm:block">
-                <p className="max-w-[150px] truncate text-xs font-bold leading-tight text-slate-950">{profile?.nombre || "Usuario"}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{profile?.rol || "Técnico"}</p>
+                <p className="text-xs font-semibold leading-tight">{profile?.nombre || "Usuario"}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{profile?.rol || "Técnico"}</p>
               </div>
             </button>
           </DropdownMenuTrigger>

@@ -45,7 +45,8 @@ export const dataService = {
     return (data || []).map(i => ({
       id: i.id,
       parteId: i.parte_id,
-      linea: i.linea,
+      linea: i.orden_linea,
+      titulo: i.titulo || undefined,
       textoOcr: i.texto_ocr,
       textoCorregido: i.texto_corregido,
       tema: i.tema,

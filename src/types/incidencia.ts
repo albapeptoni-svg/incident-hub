@@ -14,6 +14,7 @@ export interface Incidencia {
   id: string;
   parteId: string;
   linea: number;
+  titulo?: string;
   textoOcr: string;
   textoCorregido: string;
   tema: string;

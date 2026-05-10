@@ -100,7 +100,8 @@ export interface Database {
         Row: {
           id: string
           parte_id: string
-          linea: number
+          orden_linea: number
+          titulo: string | null
           texto_ocr: string
           texto_corregido: string
           tema: string
@@ -114,7 +115,8 @@ export interface Database {
         Insert: {
           id?: string
           parte_id: string
-          linea: number
+          orden_linea: number
+          titulo?: string | null
           texto_ocr: string
           texto_corregido: string
           tema: string
@@ -128,7 +130,8 @@ export interface Database {
         Update: {
           id?: string
           parte_id?: string
-          linea?: number
+          orden_linea?: number
+          titulo?: string | null
           texto_ocr?: string
           texto_corregido?: string
           tema?: string

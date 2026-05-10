@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { formatFechaES } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +18,26 @@ import {
 } from "@/services/operationalData.service";
 
 const TODOS_LOS_CENTROS = "__todos__";
+const ESTADOS_ACTIVOS = new Set([
+  "borrador",
+  "procesado",
+  "en_revision",
+  "aprobado",
+  "listo_para_enviar",
+]);
+const ESTADOS_HISTORICOS = new Set([
+  "enviado",
+  "completado",
+  "confirmado",
+]);
+const EXPANDED_PARTES_STORAGE_KEY = "siec-partes-expanded-state";
+
+type ErrorSupabaseLike = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
 
 function limpiarNumeracionInicial(texto: string): string {
   return texto
@@ -37,10 +59,54 @@ function normalizarFechaFiltro(fecha: string): string {
   return `${year}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
 }
 
+function obtenerMensajeError(error: unknown) {
+  if (error && typeof error === "object") {
+    const err = error as ErrorSupabaseLike;
+    return [err.message, err.code && `Código: ${err.code}`, err.details, err.hint]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  return typeof error === "string" ? error : "Error desconocido.";
+}
+
+function cargarExpandidosGuardados() {
+  try {
+    const raw = localStorage.getItem(EXPANDED_PARTES_STORAGE_KEY);
+    if (!raw) return {};
+    const ids = JSON.parse(raw);
+    if (!Array.isArray(ids)) return {};
+    return ids.reduce<Record<string, boolean>>((acc, id) => {
+      if (typeof id === "string" && id.trim()) acc[id] = true;
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function getParteCardClass(isHistorico: boolean) {
+  return isHistorico
+    ? "border-green-200 bg-green-50 hover:bg-green-100/60"
+    : "border-red-200 bg-red-50 hover:bg-red-100/60";
+}
+
+function getParteBadge(isHistorico: boolean) {
+  return isHistorico
+    ? {
+        label: "Gestionado",
+        className: "border-green-200 bg-green-100 text-green-700",
+      }
+    : {
+        label: "Pendiente",
+        className: "border-red-200 bg-red-100 text-red-700",
+      };
+}
+
 export default function PartesList() {
   const [partes, setPartes] = useState<ParteOperativo[]>([]);
   const [papelera, setPapelera] = useState<ParteOperativo[]>([]);
-  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>(cargarExpandidosGuardados);
   const [filtroFecha, setFiltroFecha] = useState("");
   const [filtroNombre, setFiltroNombre] = useState("");
   const [filtroCentro, setFiltroCentro] = useState(TODOS_LOS_CENTROS);
@@ -59,6 +125,7 @@ export default function PartesList() {
         operationalDataService.listarPartes(false),
         operationalDataService.listarPapelera(),
       ]);
+      console.log("Partes cargados:", partesActivos);
       setPartes(partesActivos);
       setPapelera(partesPapelera);
     } catch (error) {
@@ -72,6 +139,31 @@ export default function PartesList() {
   useEffect(() => {
     cargar();
   }, []);
+
+  useEffect(() => {
+    console.log("Filtros activos:", {
+      fecha: filtroFecha,
+      nombre: filtroNombre,
+      centro: filtroCentro,
+    });
+  }, [filtroCentro, filtroFecha, filtroNombre]);
+
+  useEffect(() => {
+    const idsExpandidos = Object.keys(expandidos).filter((id) => expandidos[id]);
+    localStorage.setItem(EXPANDED_PARTES_STORAGE_KEY, JSON.stringify(idsExpandidos));
+  }, [expandidos]);
+
+  useEffect(() => {
+    if (partes.length === 0) return;
+    const idsValidos = new Set(partes.map((parte) => parte.id));
+    setExpandidos((prev) => {
+      const siguiente = Object.fromEntries(
+        Object.entries(prev).filter(([id, abierto]) => abierto && idsValidos.has(id))
+      );
+      if (Object.keys(siguiente).length === Object.keys(prev).length) return prev;
+      return siguiente;
+    });
+  }, [partes]);
 
   const actualizarParte = async (
     parteId: string,
@@ -97,6 +189,10 @@ export default function PartesList() {
   ) => {
     const cambiosNormalizados = {
       ...cambios,
+      titulo:
+        typeof cambios.titulo === "string"
+          ? limpiarNumeracionInicial(cambios.titulo)
+          : cambios.titulo,
       texto:
         typeof cambios.texto === "string"
           ? limpiarNumeracionInicial(cambios.texto)
@@ -126,30 +222,18 @@ export default function PartesList() {
   };
 
   const eliminarParte = async (id: string) => {
-    const confirmar = window.confirm("¿Mover este parte a la papelera?");
-    if (!confirmar) return;
-
-    try {
-      await operationalDataService.moverParteAPapelera(id);
-      await cargar();
-    } catch (error) {
-      console.error(error);
-      mostrarMensaje("No se pudo mover el parte a la papelera.");
-    }
-  };
-
-  const vaciarListado = async () => {
     const confirmar = window.confirm(
-      "¿Mover todos los partes a la papelera? Podrás recuperarlos después."
+      "¿Eliminar este parte?\n\nEsta acción elimina el parte y sus incidencias asociadas de Supabase. No se puede deshacer."
     );
     if (!confirmar) return;
 
     try {
-      await operationalDataService.vaciarListado();
+      console.log("Eliminando parte de Supabase:", id);
+      await operationalDataService.moverParteAPapelera(id);
       await cargar();
     } catch (error) {
-      console.error(error);
-      mostrarMensaje("No se pudo vaciar el listado.");
+      console.error("Error eliminando parte:", error);
+      mostrarMensaje(`No se pudo eliminar el parte: ${obtenerMensajeError(error)}`);
     }
   };
 
@@ -183,16 +267,24 @@ export default function PartesList() {
     if (!confirmar) return;
 
     try {
-      await operationalDataService.enviarParteACola(parte);
+      console.log("Enviando parte al siguiente paso SIEC:", parte.id);
+      const result = await operationalDataService.enviarParteAColaSiec(parte.id);
       await cargar();
-      alert("Parte enviado al siguiente paso correctamente.");
+      alert(
+        result.yaEstabaEnCola
+          ? "Este parte ya estaba en Cola SIEC."
+          : `Parte enviado a Cola SIEC correctamente. Incidencias enviadas: ${result.incidenciasEnviadas}.`
+      );
     } catch (error) {
-      console.error(error);
-      mostrarMensaje("No se pudo enviar el parte a Cola SIEC.");
+      console.error("Error enviando parte a Cola SIEC:", error);
+      const mensaje = obtenerMensajeError(error);
+      mostrarMensaje(`No se pudo enviar el parte a Cola SIEC: ${mensaje}`);
+      alert(`No se pudo enviar el parte a Cola SIEC: ${mensaje}`);
     }
   };
 
   const toggleExpandido = (id: string) => {
+    console.log("Parte expandido/contraído:", id);
     setExpandidos((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
@@ -240,51 +332,89 @@ export default function PartesList() {
 
   const renderParte = (parte: ParteOperativo, isHistorico: boolean) => {
     const activas = parte.incidencias.filter((inc) => inc.incluirEnSIEC).length;
-    const expandido = !isHistorico || expandidos[parte.id];
+    const expandido = Boolean(expandidos[parte.id]);
+    const cardClass = getParteCardClass(isHistorico);
+    const badge = getParteBadge(isHistorico);
 
-    if (isHistorico && !expandido) {
+    if (!expandido) {
       return (
         <div
           key={parte.id}
-          className="rounded-xl border bg-slate-50 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm"
+          className={`rounded-xl border p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm transition-colors ${cardClass}`}
         >
           <div>
+            <span className={`mb-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${badge.className}`}>
+              {badge.label}
+            </span>
             <h3 className="font-semibold text-slate-800">{parte.titulo}</h3>
             <p className="text-sm text-slate-500">
-              {parte.centro} - {parte.fecha} | {activas} incidencias | Estado: {parte.estado}
+              {parte.centro} - {formatFechaES(parte.fecha)} | {activas} incidencias | Estado: {parte.estado}
             </p>
           </div>
-          <button
-            onClick={() => toggleExpandido(parte.id)}
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-          >
-            Abrir
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => toggleExpandido(parte.id)}
+              className="inline-flex items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <ChevronDown className="h-4 w-4" />
+              Expandir
+            </button>
+            {!isHistorico && (
+              <button
+                onClick={() => enviarAlSiguientePaso(parte)}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Enviar al siguiente paso SIEC
+              </button>
+            )}
+            {!isHistorico && (
+              <button
+                onClick={() => eliminarParte(parte.id)}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar parte
+              </button>
+            )}
+          </div>
         </div>
       );
     }
 
     return (
-      <div key={parte.id} className="rounded-2xl border bg-white p-5 shadow-sm">
-        {isHistorico && (
-          <div className="mb-3 flex justify-between items-center">
-            <span className="text-xs font-bold uppercase text-slate-400">Parte histórico</span>
-            <button
-              onClick={() => toggleExpandido(parte.id)}
-              className="text-sm font-semibold text-slate-500 hover:text-slate-800"
-            >
-              Contraer
-            </button>
+      <div key={parte.id} className={`rounded-2xl border p-5 shadow-sm transition-colors ${cardClass}`}>
+        <div className="mb-3 flex justify-between items-center">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${badge.className}`}>
+              {badge.label}
+            </span>
+            {isHistorico && (
+              <span className="inline-flex rounded-full border border-green-200 bg-white/70 px-3 py-1 text-xs font-semibold text-green-700">
+                Solo lectura
+              </span>
+            )}
           </div>
-        )}
+          <button
+            onClick={() => toggleExpandido(parte.id)}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800"
+          >
+            <ChevronUp className="h-4 w-4" />
+            Contraer
+          </button>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1">
             <span className="text-sm font-semibold text-slate-700">Título</span>
             <input
               value={parte.titulo}
-              onChange={(e) => actualizarParte(parte.id, { titulo: e.target.value })}
-              className="w-full rounded-lg border px-3 py-2"
+              disabled={isHistorico}
+              onChange={
+                isHistorico
+                  ? undefined
+                  : (e) => actualizarParte(parte.id, { titulo: e.target.value })
+              }
+              className="w-full rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-slate-500"
             />
           </label>
 
@@ -292,23 +422,34 @@ export default function PartesList() {
             <span className="text-sm font-semibold text-slate-700">Centro</span>
             <input
               value={parte.centro}
-              onChange={(e) => actualizarParte(parte.id, { centro: e.target.value })}
-              className="w-full rounded-lg border px-3 py-2"
+              disabled={isHistorico}
+              onChange={
+                isHistorico
+                  ? undefined
+                  : (e) => actualizarParte(parte.id, { centro: e.target.value })
+              }
+              className="w-full rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-slate-500"
             />
           </label>
 
           <label className="space-y-1">
             <span className="text-sm font-semibold text-slate-700">Fecha visita</span>
             <input
+              type="date"
               value={parte.fecha}
-              onChange={(e) => actualizarParte(parte.id, { fecha: e.target.value })}
-              className="w-full rounded-lg border px-3 py-2"
+              disabled={isHistorico}
+              onChange={
+                isHistorico
+                  ? undefined
+                  : (e) => actualizarParte(parte.id, { fecha: e.target.value })
+              }
+              className="w-full rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-slate-500"
             />
           </label>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
+          <span className={`rounded-full px-3 py-1 ${isHistorico ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
             Estado: {parte.estado}
           </span>
           <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">
@@ -319,6 +460,12 @@ export default function PartesList() {
           </span>
         </div>
 
+        {isHistorico && (
+          <p className="mt-3 rounded-lg border border-green-200 bg-white/70 px-3 py-2 text-sm text-green-800">
+            Histórico bloqueado. Las incidencias de un parte gestionado no se pueden modificar.
+          </p>
+        )}
+
         <div className="mt-5 space-y-3">
           <h3 className="font-semibold text-slate-800">Incidencias del parte</h3>
 
@@ -326,17 +473,23 @@ export default function PartesList() {
             <div
               key={incidencia.id}
               className={`rounded-xl border p-3 ${
-                incidencia.incluirEnSIEC ? "bg-white" : "bg-slate-100 opacity-70"
+                incidencia.incluirEnSIEC ? "bg-white/85" : "bg-slate-100/80 opacity-80"
               }`}
             >
               <div className="flex gap-3">
                 <input
                   type="checkbox"
                   checked={incidencia.incluirEnSIEC}
-                  onChange={(e) =>
-                    actualizarIncidencia(parte.id, incidencia.id, { incluirEnSIEC: e.target.checked })
+                  disabled={isHistorico}
+                  onChange={
+                    isHistorico
+                      ? undefined
+                      : (e) =>
+                          actualizarIncidencia(parte.id, incidencia.id, {
+                            incluirEnSIEC: e.target.checked,
+                          })
                   }
-                  className="mt-3 h-5 w-5"
+                  className="mt-3 h-5 w-5 disabled:cursor-not-allowed"
                   title="Incluir en SIEC"
                 />
 
@@ -344,12 +497,28 @@ export default function PartesList() {
                   <div className="mb-1 text-sm font-semibold text-slate-600">
                     Línea {index + 1}
                   </div>
+                  <input
+                    value={incidencia.titulo}
+                    disabled={isHistorico}
+                    onChange={
+                      isHistorico
+                        ? undefined
+                        : (e) =>
+                            actualizarIncidencia(parte.id, incidencia.id, { titulo: e.target.value })
+                    }
+                    className="mb-2 w-full rounded-lg border px-3 py-2 font-semibold text-slate-800 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-slate-500"
+                    placeholder="Título breve para SIEC"
+                  />
                   <textarea
                     value={incidencia.texto}
-                    onChange={(e) =>
-                      actualizarIncidencia(parte.id, incidencia.id, { texto: e.target.value })
+                    disabled={isHistorico}
+                    onChange={
+                      isHistorico
+                        ? undefined
+                        : (e) =>
+                            actualizarIncidencia(parte.id, incidencia.id, { texto: e.target.value })
                     }
-                    className="min-h-[76px] w-full rounded-lg border px-3 py-2 text-slate-800"
+                    className="min-h-[76px] w-full rounded-lg border px-3 py-2 text-slate-800 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-slate-500"
                   />
                 </div>
               </div>
@@ -358,12 +527,17 @@ export default function PartesList() {
         </div>
 
         <div className="mt-5 flex flex-col gap-2 md:flex-row md:justify-between">
-          <button
-            onClick={() => eliminarParte(parte.id)}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
-          >
-            Mover a papelera
-          </button>
+          {!isHistorico ? (
+            <button
+              onClick={() => eliminarParte(parte.id)}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar parte
+            </button>
+          ) : (
+            <span className="text-sm font-medium text-green-700">Parte histórico en solo lectura</span>
+          )}
 
           {!isHistorico && (
             <button
@@ -379,11 +553,11 @@ export default function PartesList() {
   };
 
   const activos = partesFiltrados
-    .filter((p) => p.estado === "revisado" || p.estado === "pendiente_siec" || p.estado === "preparado_siec")
+    .filter((p) => ESTADOS_ACTIVOS.has(p.estado || ""))
     .sort((a, b) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
 
   const historicos = partesFiltrados
-    .filter((p) => p.estado === "enviado_a_siguiente_paso" || p.estado === "enviado_siec" || p.estado === "gestionado")
+    .filter((p) => ESTADOS_HISTORICOS.has(p.estado || ""))
     .sort((a, b) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
 
   return (
@@ -409,14 +583,6 @@ export default function PartesList() {
               </button>
             )}
 
-            {partes.length > 0 && (
-              <button
-                onClick={vaciarListado}
-                className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
-              >
-                Vaciar listado
-              </button>
-            )}
           </div>
         </div>
 
@@ -493,7 +659,9 @@ export default function PartesList() {
             <div>
               <h2 className="mb-4 text-xl font-bold text-slate-800">Activos pendientes</h2>
               {activos.length === 0 ? (
-                <p className="text-slate-500">No hay partes activos.</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  No hay partes activos pendientes.
+                </div>
               ) : (
                 <div className="space-y-5">{activos.map((parte) => renderParte(parte, false))}</div>
               )}
@@ -502,7 +670,9 @@ export default function PartesList() {
             <div>
               <h2 className="mb-4 text-xl font-bold text-slate-800">Histórico</h2>
               {historicos.length === 0 ? (
-                <p className="text-slate-500">No hay partes en el histórico.</p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  Todavía no hay partes en el histórico.
+                </div>
               ) : (
                 <div className="space-y-3">{historicos.map((parte) => renderParte(parte, true))}</div>
               )}
