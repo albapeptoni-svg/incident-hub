@@ -6,12 +6,31 @@
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const MAX_IMAGE_BASE64_LENGTH = 12_000_000;
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_ROLES = new Set(["admin", "revisor", "tecnico"]);
 
-function jsonResponse(body: unknown, status = 200) {
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigins = (Deno.env.get("OCR_ALLOWED_ORIGINS") || "http://localhost:8080,http://localhost:5173")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "http://localhost:8080";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function jsonResponse(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...getCorsHeaders(req),
       "Content-Type": "application/json",
     },
   });
@@ -53,25 +72,90 @@ function extractJsonFromText(text: string) {
   }
 }
 
+function getBearerToken(req: Request) {
+  const header = req.headers.get("authorization") || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
+async function validateUser(req: Request) {
+  const token = getBearerToken(req);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+  if (!token) return { ok: false, status: 401, error: "No autorizado." };
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { ok: false, status: 500, error: "No se ha podido completar la operación." };
+  }
+
+  const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!authResponse.ok) return { ok: false, status: 401, error: "No autorizado." };
+
+  const user = await authResponse.json().catch(() => null);
+  if (!user?.id) return { ok: false, status: 401, error: "No autorizado." };
+
+  const profileResponse = await fetch(
+    `${supabaseUrl}/rest/v1/profiles?select=activo,rol&id=eq.${encodeURIComponent(user.id)}`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!profileResponse.ok) {
+    return { ok: false, status: 403, error: "No tienes permisos para realizar esta acción." };
+  }
+
+  const profiles = await profileResponse.json().catch(() => []);
+  const profile = Array.isArray(profiles) ? profiles[0] : null;
+
+  if (!profile?.activo || !ALLOWED_ROLES.has(profile.rol)) {
+    return { ok: false, status: 403, error: "No tienes permisos para realizar esta acción." };
+  }
+
+  return { ok: true, userId: user.id, role: profile.rol };
+}
+
+function validateImagePayload(imageBase64: string, mimeType: string) {
+  if (!imageBase64 || imageBase64.length > MAX_IMAGE_BASE64_LENGTH) return false;
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) return false;
+  return /^[A-Za-z0-9+/=\s]+$/.test(imageBase64);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
-      headers: corsHeaders,
+      headers: getCorsHeaders(req),
     });
   }
 
   if (req.method !== "POST") {
     return jsonResponse(
+      req,
       { error: "Método no permitido. Usa POST." },
       405,
     );
+  }
+
+  const auth = await validateUser(req);
+  if (!auth.ok) {
+    return jsonResponse(req, { error: auth.error }, auth.status);
   }
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
 
   if (!apiKey) {
     return jsonResponse(
-      { error: "Falta GEMINI_API_KEY en Supabase Edge Function Secrets." },
+      req,
+      { error: "No se ha podido completar la operación." },
       500,
     );
   }
@@ -89,9 +173,14 @@ Deno.serve(async (req) => {
 
       if (!(file instanceof File)) {
         return jsonResponse(
+          req,
           { error: "No se recibió ningún archivo en el campo file/image." },
           400,
         );
+      }
+
+      if (file.size > 8 * 1024 * 1024) {
+        return jsonResponse(req, { error: "Archivo no válido." }, 413);
       }
 
       imageBase64 = await fileToBase64(file);
@@ -110,9 +199,14 @@ Deno.serve(async (req) => {
 
     if (!imageBase64) {
       return jsonResponse(
+        req,
         { error: "No se recibió imagen en base64 ni archivo." },
         400,
       );
+    }
+
+    if (!validateImagePayload(imageBase64, mimeType)) {
+      return jsonResponse(req, { error: "Archivo no válido." }, 400);
     }
 
     const finalPrompt =
@@ -223,12 +317,13 @@ Ejemplos de título:
 
     if (!geminiResponse.ok) {
       return jsonResponse(
+        req,
         {
-          error: "Gemini devolvió un error.",
-          status: geminiResponse.status,
-          details: geminiData,
+          error: geminiResponse.status === 429
+            ? "Demasiadas solicitudes. Inténtalo de nuevo más tarde."
+            : "Error temporal del servicio OCR.",
         },
-        502,
+        geminiResponse.status === 429 ? 429 : 502,
       );
     }
 
@@ -240,24 +335,23 @@ Ejemplos de título:
 
     if (!parsed) {
       return jsonResponse(
+        req,
         {
-          error: "Gemini no devolvió JSON válido.",
-          rawText: text,
+          error: "Error temporal del servicio OCR.",
         },
         502,
       );
     }
 
-    return jsonResponse({
+    return jsonResponse(req, {
       ok: true,
       data: parsed,
-      rawText: text,
     });
   } catch (error) {
     return jsonResponse(
+      req,
       {
-        error: "Error interno en gemini-ocr.",
-        message: "Error temporal del servicio OCR.",
+        error: "Error temporal del servicio OCR.",
       },
       500,
     );

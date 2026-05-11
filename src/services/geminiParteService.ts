@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { SAFE_MESSAGES } from "@/lib/safeError";
 
 export type IncidenciaGemini = {
   titulo: string;
@@ -62,12 +63,7 @@ export async function analizarParteConGemini(file: File): Promise<ResultadoGemin
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message =
-      typeof data?.error === "string"
-        ? data.error
-        : data?.error?.message || mapGeminiHttpError(response.status);
-
-    throw new Error(message);
+    throw new Error(mapGeminiHttpError(response.status));
   }
 
   if (!data) {
@@ -613,17 +609,17 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function mapGeminiHttpError(status: number): string {
-  if (status === 404) {
-    return "Modelo Gemini no encontrado o no compatible. Revisa el modelo configurado.";
+  if (status === 400 || status === 413) {
+    return SAFE_MESSAGES.invalidFile;
   }
 
   if (status === 401 || status === 403) {
-    return "No autorizado. Revisa la sesión de usuario o la configuración de la Edge Function.";
+    return status === 401 ? SAFE_MESSAGES.auth : SAFE_MESSAGES.forbidden;
   }
 
   if (status === 429) {
-    return "Límite de uso de Gemini alcanzado.";
+    return "Demasiadas solicitudes. Inténtalo de nuevo más tarde.";
   }
 
-  return `Error analizando parte con Gemini (${status}).`;
+  return SAFE_MESSAGES.ocr;
 }

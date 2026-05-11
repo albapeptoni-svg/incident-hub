@@ -1,12 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
 import { GEMINI_PARTE_PROMPT } from "./geminiPrompt.js";
 
+dotenv.config();
 dotenv.config({ path: ".env.local" });
 
 const app = express();
-const PORT = process.env.GEMINI_SERVER_PORT || 8787;
+const PORT = process.env.GEMINI_SERVER_PORT || process.env.PORT || 8787;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_GENERATE_ENDPOINT = `${GEMINI_API_BASE_URL}/models/${GEMINI_MODEL}:generateContent`;
@@ -17,6 +19,11 @@ const allowedOrigins = (process.env.GEMINI_ALLOWED_ORIGINS || "http://localhost:
   .filter(Boolean);
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BASE64_LENGTH = 12_000_000;
+const OCR_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const OCR_RATE_LIMIT_PER_USER = 20;
+const OCR_RATE_LIMIT_PER_IP = 60;
+const allowedRoles = new Set(["admin", "revisor", "tecnico"]);
+const rateLimitBuckets = new Map();
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 function logServerError(message, error) {
@@ -25,6 +32,130 @@ function logServerError(message, error) {
     errorType: error instanceof Error ? error.name : typeof error,
     hasMessage: Boolean(error?.message),
   });
+}
+
+function genericError(status, error) {
+  return { status, error };
+}
+
+function getSupabaseServerClient(token) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) return null;
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+}
+
+function getBearerToken(req) {
+  const header = req.get("authorization") || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
+function checkRateLimit(key, limit) {
+  const now = Date.now();
+  const current = rateLimitBuckets.get(key);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + OCR_RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (current.count >= limit) return false;
+  current.count += 1;
+  return true;
+}
+
+async function authenticateOcrRequest(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    return res.status(401).json(genericError(401, "No autorizado."));
+  }
+
+  const supabase = getSupabaseServerClient(token);
+  if (!supabase) {
+    return res.status(500).json(genericError(500, "No se ha podido completar la operación."));
+  }
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
+    if (userError || !user) {
+      if (userError) logServerError("Supabase token validation failed", userError);
+      return res.status(401).json(genericError(401, "No autorizado."));
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("activo,rol")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      logServerError("Supabase profile validation failed", profileError);
+      return res.status(403).json(genericError(403, "No tienes permisos para realizar esta acción."));
+    }
+
+    if (!profile?.activo || !allowedRoles.has(profile.rol)) {
+      return res.status(403).json(genericError(403, "No tienes permisos para realizar esta acción."));
+    }
+
+    if (!checkRateLimit(`user:${user.id}`, OCR_RATE_LIMIT_PER_USER)) {
+      return res.status(429).json(genericError(429, "Demasiadas solicitudes. Inténtalo de nuevo más tarde."));
+    }
+
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    if (!checkRateLimit(`ip:${ip}`, OCR_RATE_LIMIT_PER_IP)) {
+      return res.status(429).json(genericError(429, "Demasiadas solicitudes. Inténtalo de nuevo más tarde."));
+    }
+
+    req.ocrUser = { id: user.id, role: profile.rol };
+    return next();
+  } catch (error) {
+    logServerError("OCR auth middleware failed", error);
+    return res.status(500).json(genericError(500, "No se ha podido completar la operación."));
+  }
+}
+
+function cleanBase64(value) {
+  return value.replace(/^data:.*;base64,/i, "").trim();
+}
+
+function validateImagePayload(body) {
+  const imageBase64 = typeof body?.imageBase64 === "string" ? cleanBase64(body.imageBase64) : "";
+  const mimeType = typeof body?.mimeType === "string" ? body.mimeType : "";
+
+  if (!imageBase64) {
+    return { ok: false, status: 400, error: "Archivo no válido." };
+  }
+
+  if (imageBase64.length > MAX_IMAGE_BASE64_LENGTH) {
+    return { ok: false, status: 413, error: "Archivo no válido." };
+  }
+
+  if (!allowedMimeTypes.has(mimeType)) {
+    return { ok: false, status: 400, error: "Archivo no válido." };
+  }
+
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(imageBase64)) {
+    return { ok: false, status: 400, error: "Archivo no válido." };
+  }
+
+  return { ok: true, imageBase64, mimeType };
 }
 
 app.use(
@@ -43,39 +174,31 @@ app.use(express.json({ limit: "12mb" }));
 
 function getGeminiErrorResponse(status, data) {
   const message = String(data?.error?.message || data?.error || "");
-  const base = {
-    model: GEMINI_MODEL,
-    endpoint: GEMINI_GENERATE_ENDPOINT,
-  };
 
   if (status === 404 || message.includes("404")) {
     return {
       status: 404,
-      ...base,
-      error: `Modelo Gemini no encontrado o no compatible. Revisa el modelo configurado. Modelo: ${GEMINI_MODEL}. Endpoint: ${GEMINI_GENERATE_ENDPOINT}`,
+      error: "Error temporal del servicio OCR.",
     };
   }
 
   if (status === 401 || status === 403 || message.includes("401") || message.includes("403")) {
     return {
       status: status || 403,
-      ...base,
-      error: "API key no válida o sin permisos.",
+      error: "Error temporal del servicio OCR.",
     };
   }
 
   if (status === 429 || message.includes("429")) {
     return {
       status: 429,
-      ...base,
-      error: "Límite de uso de Gemini alcanzado.",
+      error: "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
     };
   }
 
   return {
     status: status || 500,
-    ...base,
-    error: "Error analizando parte con Gemini.",
+    error: "Error temporal del servicio OCR.",
   };
 }
 
@@ -88,10 +211,10 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/gemini-models", async (req, res) => {
+app.get("/api/gemini-models", authenticateOcrRequest, async (req, res) => {
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({
-      error: "Falta GEMINI_API_KEY en .env.local",
+      error: "No se ha podido completar la operación.",
     });
   }
 
@@ -111,31 +234,18 @@ app.get("/api/gemini-models", async (req, res) => {
   });
 });
 
-app.post("/api/analizar-parte", async (req, res) => {
+app.post("/api/analizar-parte", authenticateOcrRequest, async (req, res) => {
   try {
-    const { imageBase64, mimeType } = req.body;
-
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
-        error: "Falta GEMINI_API_KEY en .env.local",
+        error: "No se ha podido completar la operación.",
       });
     }
 
-    if (typeof imageBase64 !== "string" || !imageBase64) {
-      return res.status(400).json({
-        error: "Falta imageBase64",
-      });
-    }
-
-    if (imageBase64.length > MAX_IMAGE_BASE64_LENGTH) {
-      return res.status(413).json({
-        error: "Imagen demasiado grande",
-      });
-    }
-
-    if (!allowedMimeTypes.has(mimeType)) {
-      return res.status(400).json({
-        error: "Tipo de archivo no permitido",
+    const validation = validateImagePayload(req.body);
+    if (!validation.ok) {
+      return res.status(validation.status).json({
+        error: validation.error,
       });
     }
 
@@ -153,8 +263,8 @@ app.post("/api/analizar-parte", async (req, res) => {
               { text: GEMINI_PARTE_PROMPT },
               {
                 inline_data: {
-                  mime_type: mimeType || "image/jpeg",
-                  data: imageBase64,
+                  mime_type: validation.mimeType,
+                  data: validation.imageBase64,
                 },
               },
             ],
@@ -178,9 +288,7 @@ app.post("/api/analizar-parte", async (req, res) => {
 
     if (!rawText) {
       return res.status(500).json({
-        error: "Gemini no devolvió respuesta válida",
-        model: GEMINI_MODEL,
-        endpoint: GEMINI_GENERATE_ENDPOINT,
+        error: "Error temporal del servicio OCR.",
       });
     }
 
