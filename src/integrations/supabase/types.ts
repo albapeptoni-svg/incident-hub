@@ -14,7 +14,7 @@ export interface Database {
           id: string
           nombre: string | null
           email: string
-          rol: 'admin' | 'tecnico' | 'visor'
+          rol: 'admin' | 'tecnico'
           activo: boolean
           creado_en: string
           actualizado_en: string
@@ -23,7 +23,7 @@ export interface Database {
           id: string
           nombre?: string | null
           email: string
-          rol?: 'admin' | 'tecnico' | 'visor'
+          rol?: 'admin' | 'tecnico'
           activo?: boolean
           creado_en?: string
           actualizado_en?: string
@@ -32,7 +32,7 @@ export interface Database {
           id?: string
           nombre?: string | null
           email?: string
-          rol?: 'admin' | 'tecnico' | 'visor'
+          rol?: 'admin' | 'tecnico'
           activo?: boolean
           creado_en?: string
           actualizado_en?: string

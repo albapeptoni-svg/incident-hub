@@ -2,7 +2,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   nombre text,
-  rol text not null default 'visor' check (rol in ('admin', 'tecnico', 'visor')),
+  rol text not null default 'tecnico' check (rol in ('admin', 'tecnico')),
   activo boolean not null default false,
   creado_en timestamptz not null default now(),
   actualizado_en timestamptz not null default now()
@@ -35,7 +35,7 @@ begin
     new.id,
     coalesce(new.email, ''),
     nullif(new.raw_user_meta_data->>'nombre', ''),
-    'visor',
+    'tecnico',
     false
   )
   on conflict (id) do nothing;

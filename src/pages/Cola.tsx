@@ -58,7 +58,7 @@ function agruparPorParte(cola: IncidenciaColaSIEC[]): ParteAgrupado[] {
 }
 
 export default function Cola() {
-  const { user, profile, isVisor } = useAuth();
+  const { user, profile } = useAuth();
   const [cola, setCola] = useState<IncidenciaColaSIEC[]>([]);
   const [seleccionadas, setSeleccionadas] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
@@ -151,11 +151,6 @@ export default function Cola() {
   };
 
   const enviarSeleccionadas = async (parte: ParteAgrupado) => {
-    if (isVisor) {
-      mostrarMensaje("Tu rol permite consultar, pero no gestionar incidencias.");
-      return;
-    }
-
     const idsSeleccionados = Array.from(seleccionadas[parte.id] ?? []);
     if (idsSeleccionados.length === 0) {
       mostrarMensaje("No hay incidencias seleccionadas para enviar.");
@@ -247,7 +242,6 @@ export default function Cola() {
                         <input
                           type="checkbox"
                           checked={todasSeleccionadas}
-                          disabled={isVisor}
                           onChange={() => toggleTodas(parte)}
                           className="h-4 w-4"
                         />
@@ -256,7 +250,7 @@ export default function Cola() {
 
                       <Button
                         size="sm"
-                        disabled={isVisor || totalSeleccionadas === 0}
+                        disabled={totalSeleccionadas === 0}
                         onClick={() => enviarSeleccionadas(parte)}
                       >
                         {SIEC_SIMULATION_MODE ? "Simular envío a SIEC" : "Enviar seleccionadas a SIEC"}
@@ -273,7 +267,6 @@ export default function Cola() {
                           <input
                             type="checkbox"
                             checked={seleccionParte.has(incidencia.id)}
-                            disabled={isVisor}
                             onChange={() => toggleIncidencia(parte.id, incidencia.id)}
                             className="mt-1 h-4 w-4 shrink-0"
                             aria-label={`Seleccionar incidencia ${index + 1}`}

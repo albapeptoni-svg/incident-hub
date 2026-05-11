@@ -1,9 +1,8 @@
--- 008_harden_new_profile_defaults.sql
--- Fase 3: endurece solo los perfiles nuevos.
+-- 009_two_role_defaults.sql
+-- Ajuste conservador a dos roles operativos reales: admin y tecnico.
 --
--- No modifica usuarios ni profiles existentes.
--- En Supabase hosted hay que desactivar el signup publico manualmente en:
--- Authentication > Sign In / Providers > Email > Disable sign ups.
+-- No modifica perfiles existentes ni cambia politicas RLS.
+-- Los usuarios nuevos quedan inactivos y con rol tecnico hasta activacion manual por admin.
 
 alter table public.profiles
   alter column rol set default 'tecnico',

@@ -22,7 +22,7 @@ const MAX_IMAGE_BASE64_LENGTH = 12_000_000;
 const OCR_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const OCR_RATE_LIMIT_PER_USER = 20;
 const OCR_RATE_LIMIT_PER_IP = 60;
-const allowedRoles = new Set(["admin", "revisor", "tecnico"]);
+const allowedRoles = new Set(["admin", "tecnico"]);
 const rateLimitBuckets = new Map();
 const isDevelopment = process.env.NODE_ENV !== "production";
 

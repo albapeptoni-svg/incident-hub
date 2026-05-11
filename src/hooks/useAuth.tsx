@@ -7,7 +7,6 @@ import {
   canManageSiec,
   isAdmin as checkIsAdmin,
   isTecnico as checkIsTecnico,
-  isVisor as checkIsVisor,
 } from "@/lib/permissions";
 import { logTechnicalError } from "@/lib/safeError";
 
@@ -22,7 +21,6 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   isAdmin: boolean;
   isTecnico: boolean;
-  isVisor: boolean;
   canAccessAdmin: boolean;
   canManageSiec: boolean;
 }
@@ -146,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
       isAdmin: checkIsAdmin(profile),
       isTecnico: checkIsTecnico(profile),
-      isVisor: checkIsVisor(profile),
       canAccessAdmin: canAccessAdmin(profile),
       canManageSiec: canManageSiec(profile),
     }),

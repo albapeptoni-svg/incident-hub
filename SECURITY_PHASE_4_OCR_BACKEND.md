@@ -4,7 +4,7 @@
 
 - `server/index.js` exige `Authorization: Bearer <access_token>` antes de procesar OCR.
 - El backend valida el JWT con Supabase, obtiene el usuario real y consulta `profiles`.
-- Solo pueden procesar OCR usuarios activos con rol `admin`, `revisor` o `tecnico`.
+- Solo pueden procesar OCR usuarios activos con rol `admin` o `tecnico`.
 - Se rechazan payloads vacios, tipos no permitidos y base64 demasiado grande.
 - Se aplica rate limit en memoria: 20 solicitudes OCR cada 15 minutos por usuario y 60 por IP.
 - La Edge Function `gemini-ocr` mantiene `verify_jwt = true` y ahora comprueba `profiles`.
@@ -20,7 +20,7 @@
 3. Usa `supabase.auth.getUser(token)`.
 4. Consulta `profiles` por `user.id`.
 5. Requiere `activo = true`.
-6. Requiere rol en `admin`, `revisor`, `tecnico`.
+6. Requiere rol en `admin` o `tecnico`.
 
 ### Supabase Edge Function
 
@@ -28,7 +28,7 @@
 2. Valida el token contra `/auth/v1/user`.
 3. Consulta `profiles` por REST con el JWT del usuario.
 4. Requiere `activo = true`.
-5. Requiere rol en `admin`, `revisor`, `tecnico`.
+5. Requiere rol en `admin` o `tecnico`.
 
 ## Variables necesarias
 
@@ -69,7 +69,7 @@ Nunca usar:
 3. Ejecutar la app Vite en otra terminal.
 4. Con usuario `admin` o `tecnico` activo, analizar una imagen OCR.
 5. Sin sesion o con token eliminado, `/api/analizar-parte` debe devolver 401.
-6. Con usuario inactivo o rol `visor`, debe devolver 403.
+6. Con usuario inactivo o rol distinto de `admin`/`tecnico`, debe devolver 403.
 7. Enviar payload vacio debe devolver 400.
 8. Repetir mas de 20 OCR en 15 minutos debe devolver 429.
 
@@ -79,7 +79,7 @@ Nunca usar:
 2. Configurar secrets: `GEMINI_API_KEY` y `OCR_ALLOWED_ORIGINS`.
 3. Invocar la funcion con JWT de usuario activo `admin` o `tecnico`.
 4. Probar sin Authorization: debe devolver 401.
-5. Probar con usuario `visor` o inactivo: debe devolver 403.
+5. Probar con usuario inactivo o rol distinto de `admin`/`tecnico`: debe devolver 403.
 6. Confirmar que la respuesta no incluye `rawText`.
 
 ## Riesgos pendientes

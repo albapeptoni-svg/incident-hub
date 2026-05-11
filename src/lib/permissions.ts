@@ -10,10 +10,6 @@ export function isTecnico(profile?: Pick<Usuario, "rol" | "activo"> | null) {
   return profile?.activo === true && profile.rol === "tecnico";
 }
 
-export function isVisor(profile?: Pick<Usuario, "rol" | "activo"> | null) {
-  return profile?.activo === true && profile.rol === "visor";
-}
-
 export function canAccessAdmin(profile?: Pick<Usuario, "rol" | "activo"> | null) {
   return isAdmin(profile);
 }
@@ -27,7 +23,7 @@ export function canManageOperationalData(profile?: Pick<Usuario, "rol" | "activo
 }
 
 export function canViewHistory(profile?: Pick<Usuario, "rol" | "activo"> | null) {
-  return profile?.activo === true && ["admin", "tecnico", "visor"].includes(profile.rol);
+  return profile?.activo === true && ["admin", "tecnico"].includes(profile.rol);
 }
 
 export function hasAllowedRole(

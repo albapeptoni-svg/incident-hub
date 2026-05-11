@@ -8,7 +8,7 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_IMAGE_BASE64_LENGTH = 12_000_000;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const ALLOWED_ROLES = new Set(["admin", "revisor", "tecnico"]);
+const ALLOWED_ROLES = new Set(["admin", "tecnico"]);
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";

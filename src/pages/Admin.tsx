@@ -13,7 +13,7 @@ import {
 } from "@/services/operationalData.service";
 import { logTechnicalError } from "@/lib/safeError";
 
-type Rol = "admin" | "tecnico" | "visor";
+type Rol = "admin" | "tecnico";
 
 type ProfileRow = {
   id: string;
@@ -213,7 +213,6 @@ export default function Admin() {
                         >
                           <option value="admin">admin</option>
                           <option value="tecnico">tecnico</option>
-                          <option value="visor">visor</option>
                         </select>
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground">
