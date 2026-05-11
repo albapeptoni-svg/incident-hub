@@ -5,6 +5,33 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { SAFE_MESSAGES, logTechnicalError } from "@/lib/safeError";
 
+const VALID_ROLES = new Set(["admin", "tecnico"]);
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+async function registerLoginFailure(email: string, reason: string) {
+  const { error } = await supabase.rpc("register_login_failure" as any, {
+    p_email: email,
+    p_reason: reason,
+  });
+
+  if (error) {
+    logTechnicalError("Login failure registration failed", error);
+  }
+}
+
+async function registerLoginSuccess(userId: string) {
+  const { error } = await supabase.rpc("register_login_success" as any, {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    logTechnicalError("Login success registration failed", error);
+  }
+}
+
 export default function Login() {
   const navigate = useNavigate();
 
@@ -21,15 +48,36 @@ export default function Login() {
     setErrorMessage("");
     setLoading(true);
 
+    const normalizedEmail = normalizeEmail(email);
+
     localStorage.setItem("siec-remember-session", rememberSession ? "true" : "false");
 
+    const { data: lockRows, error: lockError } = await supabase.rpc("get_login_lock_status" as any, {
+      p_email: normalizedEmail,
+    });
+
+    if (lockError) {
+      logTechnicalError("Login lock status check failed", lockError);
+      setLoading(false);
+      setErrorMessage(SAFE_MESSAGES.auth);
+      return;
+    }
+
+    const lockStatus = Array.isArray(lockRows) ? lockRows[0] : lockRows;
+    if (lockStatus?.locked || lockStatus?.hard_locked) {
+      setLoading(false);
+      setErrorMessage(SAFE_MESSAGES.auth);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
 
     if (error || !data.user) {
       if (error) logTechnicalError("Login failed", error);
+      await registerLoginFailure(normalizedEmail, "invalid_credentials");
       setLoading(false);
       setErrorMessage(SAFE_MESSAGES.auth);
       return;
@@ -37,17 +85,20 @@ export default function Login() {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("activo")
+      .select("activo,rol")
       .eq("id", data.user.id)
       .maybeSingle();
 
-    if (profileError || !profile?.activo) {
+    if (profileError || !profile?.activo || !VALID_ROLES.has(profile.rol)) {
       if (profileError) logTechnicalError("Login profile check failed", profileError);
       await supabase.auth.signOut();
+      await registerLoginFailure(normalizedEmail, "inactive_or_invalid_profile");
       setLoading(false);
       setErrorMessage(SAFE_MESSAGES.auth);
       return;
     }
+
+    await registerLoginSuccess(data.user.id);
 
     setLoading(false);
 
