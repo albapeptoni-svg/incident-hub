@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 
 
-.env
+.envocr-backend/.venv/
+**/.venv/
+node_modules/
+dist/
