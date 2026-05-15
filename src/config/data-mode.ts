@@ -8,11 +8,24 @@ function normalizeDataMode(value: unknown): DataMode {
     : "auto";
 }
 
-const FORCE_MOCK_MODE = false;
+function isEnabled(value: unknown) {
+  return typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
 
-export const dataMode: DataMode = FORCE_MOCK_MODE
+const requestedDataMode = normalizeDataMode(import.meta.env.VITE_DATA_MODE);
+const explicitlyRequestedMock =
+  requestedDataMode === "mock" ||
+  isEnabled(import.meta.env.VITE_USE_MOCK) ||
+  isEnabled(import.meta.env.DEV_MODE) ||
+  isEnabled(import.meta.env.MOCK_AUTH);
+
+const canUseMockMode = import.meta.env.DEV && explicitlyRequestedMock;
+
+export const dataMode: DataMode = canUseMockMode
   ? "mock"
-  : normalizeDataMode(import.meta.env.VITE_DATA_MODE);
+  : requestedDataMode === "real"
+    ? "real"
+    : "auto";
 
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
