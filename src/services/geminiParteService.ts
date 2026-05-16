@@ -77,17 +77,19 @@ export function normalizarRespuestaGemini(respuesta: unknown): ResultadoGemini {
     throw new Error("Respuesta de Gemini inválida");
   }
 
-  const incidenciasRaw = Array.isArray(parsed.incidencias)
-    ? parsed.incidencias
+  const fuente = isObject(parsed.data) ? parsed.data : parsed;
+
+  const incidenciasRaw = Array.isArray(fuente.incidencias)
+    ? fuente.incidencias
     : [];
 
   return {
-    centro: stringSeguro(parsed.centro),
-    fecha_visita: stringSeguro(parsed.fecha_visita),
+    centro: stringSeguro(fuente.centro),
+    fecha_visita: stringSeguro(fuente.fecha_visita),
     incidencias: incidenciasRaw.map(normalizarIncidencia),
-    texto_original_detectado: stringSeguro(parsed.texto_original_detectado),
-    avisos: Array.isArray(parsed.avisos)
-      ? parsed.avisos.map((a) => String(a))
+    texto_original_detectado: stringSeguro(fuente.texto_original_detectado),
+    avisos: Array.isArray(fuente.avisos)
+      ? fuente.avisos.map((a) => String(a))
       : [],
   };
 }
