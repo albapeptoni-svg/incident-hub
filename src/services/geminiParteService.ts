@@ -130,6 +130,18 @@ export function normalizarTituloIncidencia(
 }
 
 function normalizarIncidencia(item: unknown): IncidenciaGemini {
+  if (typeof item === "string") {
+    const texto = item.trim();
+    const esChecklist = texto.toLowerCase().includes("checklist");
+
+    return {
+      titulo: normalizarTituloIncidencia(texto, texto),
+      descripcion: texto,
+      incluirEnSIEC: !esChecklist,
+      confianza: "media",
+    };
+  }
+
   if (!isObject(item)) {
     return {
       titulo: "Incidencia sin título",
