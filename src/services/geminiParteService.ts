@@ -29,6 +29,7 @@ export async function analizarParteConGemini(file: File): Promise<ResultadoGemin
 
   const base64 = await fileToBase64(file);
   const accessToken = await getSupabaseAccessToken();
+
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   };
@@ -91,6 +92,43 @@ export function normalizarRespuestaGemini(respuesta: unknown): ResultadoGemini {
   };
 }
 
+export function generarTituloFallback(texto: string): string {
+  const limpio = String(texto ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^[\d\s.\-:;]+/, "")
+    .trim();
+
+  if (!limpio) {
+    return "Incidencia sin título";
+  }
+
+  const primeraFrase = limpio.split(/[.!?]/)[0]?.trim() || limpio;
+
+  return primeraFrase.length > 80
+    ? `${primeraFrase.slice(0, 77).trim()}...`
+    : primeraFrase;
+}
+
+export function normalizarTituloIncidencia(
+  titulo: string,
+  texto?: string
+): string {
+  const tituloLimpio = String(titulo ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^[\d\s.\-:;]+/, "")
+    .trim();
+
+  if (tituloLimpio.length > 0) {
+    return tituloLimpio.length > 80
+      ? `${tituloLimpio.slice(0, 77).trim()}...`
+      : tituloLimpio;
+  }
+
+  return generarTituloFallback(String(texto ?? ""));
+}
+
 function normalizarIncidencia(item: unknown): IncidenciaGemini {
   if (!isObject(item)) {
     return {
@@ -108,7 +146,10 @@ function normalizarIncidencia(item: unknown): IncidenciaGemini {
     descripcion.toLowerCase().includes("checklist");
 
   return {
-    titulo: titulo || (esChecklist ? "Checklist" : "Incidencia sin título"),
+    titulo: normalizarTituloIncidencia(
+      titulo || (esChecklist ? "Checklist" : "Incidencia sin título"),
+      descripcion
+    ),
     descripcion,
     incluirEnSIEC:
       typeof item.incluirEnSIEC === "boolean"
