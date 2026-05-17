@@ -110,16 +110,16 @@ export default function Admin() {
 
   const limpiarDatosPrueba = async () => {
     const confirmar = window.confirm(
-      "¿Limpiar partes, incidencias, cola e historial de Supabase? Usuarios reales, perfiles, roles y configuración se conservarán."
+      "Esta acción solo debe usarse en entorno de pruebas. ¿Deseas continuar?"
     );
     if (!confirmar) return;
 
     try {
       await operationalDataService.resetOperationalTestingData();
-      mostrarMensaje("Datos de prueba eliminados de Supabase.");
+      mostrarMensaje("Datos demo reiniciados.");
     } catch (error) {
       logTechnicalError("Admin testing data cleanup failed", error);
-      mostrarMensaje("No se pudieron limpiar los datos de prueba. Revisa permisos de admin y SQL 005.");
+      mostrarMensaje("No se pudieron reiniciar los datos demo. Revisa permisos de admin y SQL 005.");
     }
   };
 
@@ -141,8 +141,8 @@ export default function Admin() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Administración"
-        title="Seguridad y configuración"
-        subtitle="Usuarios reales de Supabase Auth, roles de acceso y ajustes de operación en Supabase."
+        title="Administración operativa"
+        subtitle="Control de entorno, roles de acceso y parámetros operativos del flujo SIEC Flow AI."
       />
 
       {mensaje && (
@@ -157,10 +157,10 @@ export default function Admin() {
             <div>
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
-                <h2 className="font-display text-base font-semibold">Profiles</h2>
+                <h2 className="font-display text-base font-semibold">Usuarios y roles</h2>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Perfiles vinculados a usuarios de Supabase Auth.
+                Usuarios autorizados para operar la plataforma. La gestión de cuentas se apoya en Supabase Auth y el acceso se limita a roles admin y técnico.
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={cargarProfiles} disabled={loadingProfiles}>
@@ -177,9 +177,9 @@ export default function Admin() {
             </div>
           ) : profiles.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="font-display text-lg font-semibold">No hay profiles visibles.</p>
+              <p className="font-display text-lg font-semibold">No hay perfiles cargados en esta vista.</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Crea usuarios en Supabase Auth y ejecuta el SQL de profiles para generar perfiles.
+                Los usuarios reales se gestionan desde Supabase Auth. Esta sección queda preparada para control interno de roles y auditoría.
               </p>
             </div>
           ) : (
@@ -239,10 +239,9 @@ export default function Admin() {
             <div className="flex items-start gap-3">
               <UserPlus className="mt-0.5 h-4 w-4 text-primary" />
               <div>
-                <p className="text-sm font-semibold">Alta de usuarios</p>
+                <p className="text-sm font-semibold">Gestión de acceso</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Las contraseñas no se gestionan desde el frontend. Crea usuarios desde
-                  Supabase Auth &gt; Users o implementa una Edge Function segura para invitaciones.
+                  Por seguridad, las contraseñas y altas de usuario no se gestionan directamente desde el frontend. Las cuentas se crean desde Supabase Auth o mediante una Edge Function segura en una fase futura.
                 </p>
               </div>
             </div>
@@ -255,6 +254,9 @@ export default function Admin() {
               <Settings2 className="h-4 w-4 text-primary" />
               <h2 className="font-display text-base font-semibold">Configuración general</h2>
             </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Parámetros usados para diferenciar pruebas, demostraciones y futura operación real.
+            </p>
 
             <div className="mt-4 space-y-4">
               <div className="space-y-1.5">
@@ -282,7 +284,7 @@ export default function Admin() {
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="pruebas">pruebas</option>
-                  <option value="produccion">produccion</option>
+                  <option value="produccion">producción</option>
                 </select>
               </div>
 
@@ -290,7 +292,7 @@ export default function Admin() {
                 <Label htmlFor="modo-siec" className="text-xs">Modo SIEC</Label>
                 <select
                   id="modo-siec"
-                  value={config.modoSiec}
+                  value={config.modoSiec === "simulado" ? "simulado" : "api_futura"}
                   onChange={(event) =>
                     setConfig((prev) => ({
                       ...prev,
@@ -300,8 +302,7 @@ export default function Admin() {
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="simulado">simulado</option>
-                  <option value="manual">manual</option>
-                  <option value="api_futura">api_futura</option>
+                  <option value="api_futura">real</option>
                 </select>
               </div>
 
@@ -334,10 +335,10 @@ export default function Admin() {
           <section className="surface-card p-5">
             <div className="flex items-center gap-2">
               <Wrench className="h-4 w-4 text-warning" />
-              <h2 className="font-display text-base font-semibold">Mantenimiento</h2>
+              <h2 className="font-display text-base font-semibold">Entorno de pruebas</h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Limpia datos operativos de Supabase sin borrar usuarios reales, perfiles, roles ni configuración.
+              Acciones controladas para reiniciar información operativa de demostración sin eliminar usuarios, roles ni configuración.
             </p>
 
             <Button
@@ -345,7 +346,7 @@ export default function Admin() {
               className="mt-4 w-full"
               onClick={limpiarDatosPrueba}
             >
-              <Trash2 className="mr-2 h-4 w-4" /> Limpiar datos de prueba
+              <Trash2 className="mr-2 h-4 w-4" /> Reiniciar datos demo
             </Button>
           </section>
         </div>
