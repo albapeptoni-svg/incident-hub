@@ -176,10 +176,26 @@ export default function Admin() {
               </p>
             </div>
           ) : profiles.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="font-display text-lg font-semibold">No hay perfiles cargados en esta vista.</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Los usuarios reales se gestionan desde Supabase Auth. Esta sección queda preparada para control interno de roles y auditoría.
+            <div className="space-y-4 p-5">
+              <div>
+                <p className="font-display text-lg font-semibold">Modelo de acceso</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-sm font-semibold">Administrador</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Configura el entorno, supervisa parámetros operativos y accede a la administración del sistema.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-sm font-semibold">Técnico</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Trabaja con el flujo operativo: IA Partes, Partes, Cola SIEC e Historial.
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                La gestión real de usuarios se realiza desde Supabase Auth. Esta pantalla documenta el modelo de acceso aplicado en la plataforma.
               </p>
             </div>
           ) : (
@@ -241,7 +257,7 @@ export default function Admin() {
               <div>
                 <p className="text-sm font-semibold">Gestión de acceso</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Por seguridad, las contraseñas y altas de usuario no se gestionan directamente desde el frontend. Las cuentas se crean desde Supabase Auth o mediante una Edge Function segura en una fase futura.
+                  Las altas, contraseñas y cambios de usuario se gestionan desde Supabase Auth para evitar exponer credenciales desde el frontend.
                 </p>
               </div>
             </div>
